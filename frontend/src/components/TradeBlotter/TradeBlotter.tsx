@@ -1,9 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { Trade } from '../../types/trade';
 import { colDefs } from './columnDefs';
+import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
+import { useToast } from '../../context/ToastContext';
+import { formatLargeNotional } from '../../utils/formatters';
 
 interface Props {
   trades: Trade[];
@@ -11,80 +14,163 @@ interface Props {
   error: unknown;
   refetch: () => void;
   cancelTrade: (id: string) => Promise<Trade>;
-  connected: boolean;
   onAmend: (trade: Trade) => void;
   onCreate: () => void;
   onViewAudit: (trade: Trade) => void;
 }
 
-export function TradeBlotter({ trades, isLoading, error, refetch, cancelTrade, connected, onAmend, onCreate, onViewAudit }: Props) {
+export function TradeBlotter({
+  trades, isLoading, error, refetch, cancelTrade,
+  onAmend, onCreate, onViewAudit,
+}: Props) {
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
+  const toast = useToast();
+
+  const activeTrades  = useMemo(() => trades.filter(t => t.status === 'ACTIVE'), [trades]);
+  const totalNotional = useMemo(
+    () => activeTrades.reduce((sum, t) => sum + t.price * t.quantity, 0),
+    [activeTrades],
+  );
+
+  const handleCancelConfirmed = async () => {
+    const id = pendingCancelId!;
+    setPendingCancelId(null);
+    try {
+      await cancelTrade(id);
+      toast('success', 'Trade cancelled', id);
+    } catch (err) {
+      toast('error', 'Cancel failed', err instanceof Error ? err.message : 'Unknown error');
+    }
+  };
+
   const actionColDef = useMemo(() => ({
     headerName: 'Actions',
-    width: 220,
+    width: 210,
     pinned: 'right' as const,
     sortable: false,
     filter: false,
+    resizable: false,
     cellRenderer: (params: { data: Trade }) => {
       const trade = params.data;
       if (!trade) return null;
+      const cancelled = trade.status === 'CANCELLED';
       return (
         <div style={{ display: 'flex', gap: 4, alignItems: 'center', height: '100%' }}>
           <button
+            className="btn btn-sm btn-ghost"
             onClick={() => onAmend(trade)}
-            disabled={trade.status === 'CANCELLED'}
-            style={btnStyle(trade.status === 'CANCELLED')}
+            disabled={cancelled}
+            title="Amend trade"
           >
             Amend
           </button>
           <button
-            onClick={() => cancelTrade(trade.id).catch((err: Error) => alert(err.message))}
-            disabled={trade.status === 'CANCELLED'}
-            style={btnStyle(trade.status === 'CANCELLED', '#dc2626')}
+            className="btn btn-sm btn-danger"
+            onClick={() => setPendingCancelId(trade.id)}
+            disabled={cancelled}
+            title="Cancel trade"
           >
             Cancel
           </button>
-          <button onClick={() => onViewAudit(trade)} style={btnStyle(false, '#6366f1')}>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => onViewAudit(trade)}
+            title="View audit trail"
+            style={{ color: '#6366f1', borderColor: '#c7d2fe' }}
+          >
             Audit
           </button>
         </div>
       );
     },
-  }), [onAmend, onViewAudit, cancelTrade]);
+  }), [onAmend, onViewAudit, setPendingCancelId]);
 
-  if (error) return <div style={{ color: 'red', padding: 16 }}>Failed to load trades: {String(error)}</div>;
+  if (error) {
+    return (
+      <div className="blotter-card">
+        <div className="empty-state">
+          <div className="empty-state__icon">⚠</div>
+          <div className="empty-state__title">Failed to load trades</div>
+          <div className="empty-state__desc">{String(error)}</div>
+          <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => refetch()}>Retry</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ display: 'flex', gap: 8, padding: '8px 0', alignItems: 'center' }}>
-        <button onClick={onCreate} style={btnStyle(false, '#16a34a')}>+ New Trade</button>
-        <button onClick={() => refetch()} style={btnStyle(false)}>Refresh</button>
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: connected ? '#16a34a' : '#dc2626' }}>
-          {connected ? '● Live' : '○ Reconnecting...'}
-        </span>
-      </div>
-      <div className="ag-theme-alpine" style={{ flex: 1 }}>
-        {isLoading ? (
-          <div style={{ padding: 16 }}>Loading...</div>
-        ) : (
-          <AgGridReact
-            rowData={trades}
-            columnDefs={[...colDefs, actionColDef]}
-            defaultColDef={{ sortable: true, resizable: true, floatingFilter: true }}
-            pagination
-            paginationPageSize={50}
-            rowHeight={36}
-            animateRows
-            getRowId={(p) => p.data.id}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
+    <>
+      <div className="blotter-card">
+        {isLoading && <div className="loading-shimmer" />}
 
-function btnStyle(disabled: boolean, color = '#3b82f6'): React.CSSProperties {
-  return {
-    padding: '2px 8px', fontSize: 12, borderRadius: 4, border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-    background: disabled ? '#e5e7eb' : color, color: disabled ? '#9ca3af' : '#fff',
-  };
+        <div className="blotter-toolbar">
+          <button className="btn btn-success" onClick={onCreate}>
+            <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> New Trade
+          </button>
+          <div className="blotter-toolbar__divider" />
+          <button className="btn btn-ghost" onClick={() => refetch()} title="Refresh data">
+            ↻ Refresh
+          </button>
+
+          <div className="blotter-toolbar__spacer" />
+
+          <div className="blotter-toolbar__meta">
+            <span className="blotter-toolbar__meta-item">
+              Active
+              <span className="blotter-toolbar__meta-value">{activeTrades.length}</span>
+            </span>
+            <span className="blotter-toolbar__meta-item">
+              Notional
+              <span className="blotter-toolbar__meta-value">{formatLargeNotional(totalNotional)}</span>
+            </span>
+            <span className="blotter-toolbar__meta-item">
+              Total
+              <span className="blotter-toolbar__meta-value">{trades.length}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="ag-theme-alpine" style={{ flex: 1 }}>
+          {!isLoading && trades.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state__icon">📋</div>
+              <div className="empty-state__title">No trades yet</div>
+              <div className="empty-state__desc">Click "New Trade" to add your first trade.</div>
+            </div>
+          ) : (
+            <AgGridReact
+              rowData={trades}
+              columnDefs={[...colDefs, actionColDef]}
+              defaultColDef={{ sortable: true, resizable: true, floatingFilter: true }}
+              getRowClass={(p) => p.data?.status === 'CANCELLED' ? 'ag-row-cancelled' : ''}
+              pagination
+              paginationPageSize={50}
+              rowHeight={34}
+              headerHeight={34}
+              floatingFiltersHeight={30}
+              animateRows
+              getRowId={(p) => p.data.id}
+            />
+          )}
+        </div>
+      </div>
+
+      {pendingCancelId && (
+        <ConfirmDialog
+          title="Cancel Trade"
+          message={
+            <>
+              Are you sure you want to cancel{' '}
+              <span className="confirm__id">{pendingCancelId}</span>?{' '}
+              This action cannot be undone.
+            </>
+          }
+          confirmLabel="Cancel Trade"
+          cancelLabel="Keep"
+          onConfirm={handleCancelConfirmed}
+          onCancel={() => setPendingCancelId(null)}
+        />
+      )}
+    </>
+  );
 }

@@ -1,5 +1,6 @@
 export type TradeSide = 'BUY' | 'SELL';
 export type TradeStatus = 'ACTIVE' | 'CANCELLED';
+export type AuditAction = 'CREATE' | 'AMEND' | 'CANCEL';
 export type WsEventType = 'TRADE_CREATED' | 'TRADE_AMENDED' | 'TRADE_CANCELLED';
 
 export interface Trade {
@@ -18,7 +19,7 @@ export interface Trade {
 export interface TradeAudit {
   id: string;
   tradeId: string;
-  action: string;
+  action: AuditAction;
   before: Trade | null;
   after: Trade;
   changedAt: string;
@@ -39,12 +40,4 @@ export interface CreateTradeInput {
   counterparty: string;
 }
 
-export interface AmendTradeInput {
-  symbol?: string;
-  quantity?: number;
-  price?: number;
-  side?: TradeSide;
-  trader?: string;
-  book?: string;
-  counterparty?: string;
-}
+export type AmendTradeInput = Partial<CreateTradeInput>;

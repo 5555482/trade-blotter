@@ -1,10 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-import { Trade, TradeAudit } from '../types';
+import { Trade, TradeAudit, AuditAction } from '../types';
 
 export class AuditRepository {
   constructor(private readonly db: PrismaClient) {}
 
-  async append(tradeId: string, action: string, before: Trade | null, after: Trade): Promise<void> {
+  async append(tradeId: string, action: AuditAction, before: Trade | null, after: Trade): Promise<void> {
     await this.db.tradeAudit.create({
       data: {
         tradeId,
@@ -23,7 +23,7 @@ export class AuditRepository {
     return rows.map((r) => ({
       id: r.id,
       tradeId: r.tradeId,
-      action: r.action,
+      action: r.action as AuditAction,
       before: r.before ? (JSON.parse(r.before) as Trade) : null,
       after: JSON.parse(r.after) as Trade,
       changedAt: r.changedAt.toISOString(),

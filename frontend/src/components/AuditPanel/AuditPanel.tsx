@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Trade, TradeAudit } from '../../types/trade';
 import { tradesApi } from '../../api/trades';
 import { formatDate } from '../../utils/formatters';
+import { overlayStyle } from '../../utils/styles';
 
 interface Props {
   trade: Trade | null;
@@ -72,10 +73,6 @@ function actionColor(action: string): string {
   return '#2563eb';
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-};
 const panelStyle: React.CSSProperties = {
   background: '#fff', borderRadius: 8, padding: 24, width: 500,
   maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',

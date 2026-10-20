@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Trade } from './types/trade';
+import { useTrades } from './hooks/useTrades';
+import { useWebSocket } from './hooks/useWebSocket';
 import { TradeBlotter } from './components/TradeBlotter/TradeBlotter';
 import { TradeForm } from './components/TradeForm/TradeForm';
 import { AuditPanel } from './components/AuditPanel/AuditPanel';
@@ -7,6 +9,14 @@ import { AuditPanel } from './components/AuditPanel/AuditPanel';
 export function App() {
   const [formTrade, setFormTrade] = useState<Trade | undefined | null>(null);
   const [auditTrade, setAuditTrade] = useState<Trade | null>(null);
+
+  const {
+    trades, isLoading, error, refetch,
+    applyWsEvent, createTrade, amendTrade, cancelTrade,
+    isCreating, isAmending,
+  } = useTrades();
+
+  const { connected } = useWebSocket(applyWsEvent);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Inter, system-ui, sans-serif' }}>
@@ -16,6 +26,12 @@ export function App() {
       </header>
       <main style={{ flex: 1, padding: 16, overflow: 'hidden' }}>
         <TradeBlotter
+          trades={trades}
+          isLoading={isLoading}
+          error={error}
+          refetch={refetch}
+          cancelTrade={cancelTrade}
+          connected={connected}
           onAmend={(trade) => setFormTrade(trade)}
           onCreate={() => setFormTrade(undefined)}
           onViewAudit={(trade) => setAuditTrade(trade)}
@@ -25,6 +41,10 @@ export function App() {
         <TradeForm
           trade={formTrade ?? undefined}
           onClose={() => setFormTrade(null)}
+          createTrade={createTrade}
+          amendTrade={amendTrade}
+          isCreating={isCreating}
+          isAmending={isAmending}
         />
       )}
       {auditTrade && (

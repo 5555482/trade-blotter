@@ -2,7 +2,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { tradesApi } from '../api/trades';
 import { Trade, CreateTradeInput, AmendTradeInput, WsEvent } from '../types/trade';
-import { useWebSocket } from './useWebSocket';
 
 const TRADES_KEY = ['trades'] as const;
 
@@ -14,7 +13,7 @@ export function useTrades() {
     queryFn: tradesApi.getAll,
   });
 
-  const handleWsEvent = useCallback((event: WsEvent) => {
+  const applyWsEvent = useCallback((event: WsEvent) => {
     queryClient.setQueryData<Trade[]>(TRADES_KEY, (prev = []) => {
       switch (event.type) {
         case 'TRADE_CREATED':
@@ -27,8 +26,6 @@ export function useTrades() {
       }
     });
   }, [queryClient]);
-
-  const { connected } = useWebSocket(handleWsEvent);
 
   const createMutation = useMutation({
     mutationFn: (input: CreateTradeInput) => tradesApi.create(input),
@@ -48,7 +45,7 @@ export function useTrades() {
     isLoading,
     error,
     refetch,
-    connected,
+    applyWsEvent,
     createTrade: createMutation.mutateAsync,
     amendTrade: amendMutation.mutateAsync,
     cancelTrade: cancelMutation.mutateAsync,

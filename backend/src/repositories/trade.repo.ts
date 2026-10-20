@@ -20,9 +20,14 @@ function toTradeDTO(raw: {
   };
 }
 
-let idCounter = 100001;
+let idCounter: number | null = null;
 
-function generateId(): string {
+async function nextId(db: PrismaClient): Promise<string> {
+  if (idCounter === null) {
+    const last = await db.trade.findFirst({ orderBy: { id: 'desc' } });
+    const lastNum = last ? parseInt(last.id.replace('TRD-', ''), 10) : 100000;
+    idCounter = lastNum + 1;
+  }
   return `TRD-${String(idCounter++).padStart(6, '0')}`;
 }
 
@@ -42,7 +47,7 @@ export class TradeRepository {
   async create(input: CreateTradeInput): Promise<Trade> {
     const row = await this.db.trade.create({
       data: {
-        id: generateId(),
+        id: await nextId(this.db),
         ...input,
         tradeTimestamp: new Date(),
         status: 'ACTIVE',

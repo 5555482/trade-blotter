@@ -2,11 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { WsEvent } from '../types/trade';
 
 const RECONNECT_DELAY_MS = 3000;
-
-function getWsUrl(): string {
-  const host = window.location.hostname;
-  return `ws://${host}:3001/ws`;
-}
+const WS_URL = `ws://${window.location.hostname}:3001/ws`;
 
 export function useWebSocket(onEvent: (event: WsEvent) => void): { connected: boolean } {
   const [connected, setConnected] = useState(false);
@@ -16,7 +12,7 @@ export function useWebSocket(onEvent: (event: WsEvent) => void): { connected: bo
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
-    const ws = new WebSocket(getWsUrl());
+    const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => setConnected(true);

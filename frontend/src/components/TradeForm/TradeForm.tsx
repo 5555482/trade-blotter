@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Trade, CreateTradeInput, AmendTradeInput, TradeSide } from '../../types/trade';
-import { useTrades } from '../../hooks/useTrades';
+import { overlayStyle } from '../../utils/styles';
 
 interface Props {
   trade?: Trade;
   onClose: () => void;
+  createTrade: (input: CreateTradeInput) => Promise<Trade>;
+  amendTrade: (args: { id: string; input: AmendTradeInput }) => Promise<Trade>;
+  isCreating: boolean;
+  isAmending: boolean;
 }
 
 const SYMBOLS = ['AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'GS', 'BABA'];
@@ -25,8 +29,7 @@ function validate(values: Partial<CreateTradeInput>): FormErrors {
   return errors;
 }
 
-export function TradeForm({ trade, onClose }: Props) {
-  const { createTrade, amendTrade, isCreating, isAmending } = useTrades();
+export function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating, isAmending }: Props) {
   const isEdit = !!trade;
 
   const [values, setValues] = useState<Partial<CreateTradeInput>>({
@@ -135,10 +138,6 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   );
 }
 
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-};
 const modalStyle: React.CSSProperties = {
   background: '#fff', borderRadius: 8, padding: 24, width: 420,
   maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',

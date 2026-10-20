@@ -1,10 +1,10 @@
 import { AuditRepository } from '../repositories/audit.repo';
-import { Trade, TradeAudit } from '../types';
+import { Trade, TradeAudit, AuditAction } from '../types';
 
 export class AuditService {
   constructor(private readonly repo: AuditRepository) {}
 
-  async record(action: string, before: Trade | null, after: Trade): Promise<void> {
+  async record(action: AuditAction, before: Trade | null, after: Trade): Promise<void> {
     await this.repo.append(after.id, action, before, after);
   }
 

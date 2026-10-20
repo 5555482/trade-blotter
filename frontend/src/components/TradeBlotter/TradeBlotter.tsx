@@ -1,27 +1,24 @@
-import { useCallback, useRef } from 'react';
+import { useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
-import { GridReadyEvent, GridApi } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { Trade } from '../../types/trade';
-import { useTrades } from '../../hooks/useTrades';
 import { colDefs } from './columnDefs';
 
 interface Props {
+  trades: Trade[];
+  isLoading: boolean;
+  error: unknown;
+  refetch: () => void;
+  cancelTrade: (id: string) => Promise<Trade>;
+  connected: boolean;
   onAmend: (trade: Trade) => void;
   onCreate: () => void;
   onViewAudit: (trade: Trade) => void;
 }
 
-export function TradeBlotter({ onAmend, onCreate, onViewAudit }: Props) {
-  const { trades, isLoading, error, refetch, cancelTrade, connected } = useTrades();
-  const gridApiRef = useRef<GridApi | null>(null);
-
-  const onGridReady = useCallback((e: GridReadyEvent) => {
-    gridApiRef.current = e.api;
-  }, []);
-
-  const actionColDef = {
+export function TradeBlotter({ trades, isLoading, error, refetch, cancelTrade, connected, onAmend, onCreate, onViewAudit }: Props) {
+  const actionColDef = useMemo(() => ({
     headerName: 'Actions',
     width: 220,
     pinned: 'right' as const,
@@ -52,7 +49,7 @@ export function TradeBlotter({ onAmend, onCreate, onViewAudit }: Props) {
         </div>
       );
     },
-  };
+  }), [onAmend, onViewAudit, cancelTrade]);
 
   if (error) return <div style={{ color: 'red', padding: 16 }}>Failed to load trades: {String(error)}</div>;
 
@@ -72,7 +69,6 @@ export function TradeBlotter({ onAmend, onCreate, onViewAudit }: Props) {
           <AgGridReact
             rowData={trades}
             columnDefs={[...colDefs, actionColDef]}
-            onGridReady={onGridReady}
             defaultColDef={{ sortable: true, resizable: true, floatingFilter: true }}
             pagination
             paginationPageSize={50}

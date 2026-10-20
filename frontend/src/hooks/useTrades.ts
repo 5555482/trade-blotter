@@ -31,13 +31,41 @@ export function useTrades() {
     mutationFn: (input: CreateTradeInput) => tradesApi.create(input),
   });
 
+  // Optimistic amend: apply field changes immediately, rollback on error
   const amendMutation = useMutation({
     mutationFn: ({ id, input }: { id: string; input: AmendTradeInput }) =>
       tradesApi.amend(id, input),
+
+    onMutate: async ({ id, input }) => {
+      await queryClient.cancelQueries({ queryKey: TRADES_KEY });
+      const snapshot = queryClient.getQueryData<Trade[]>(TRADES_KEY);
+      queryClient.setQueryData<Trade[]>(TRADES_KEY, (prev = []) =>
+        prev.map(t => t.id === id ? { ...t, ...input } : t),
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, ctx) => {
+      queryClient.setQueryData(TRADES_KEY, ctx?.snapshot);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: TRADES_KEY }),
   });
 
+  // Optimistic cancel: mark as CANCELLED immediately, rollback on error
   const cancelMutation = useMutation({
     mutationFn: (id: string) => tradesApi.cancel(id),
+
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: TRADES_KEY });
+      const snapshot = queryClient.getQueryData<Trade[]>(TRADES_KEY);
+      queryClient.setQueryData<Trade[]>(TRADES_KEY, (prev = []) =>
+        prev.map(t => t.id === id ? { ...t, status: 'CANCELLED' as Trade['status'] } : t),
+      );
+      return { snapshot };
+    },
+    onError: (_err, _id, ctx) => {
+      queryClient.setQueryData(TRADES_KEY, ctx?.snapshot);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: TRADES_KEY }),
   });
 
   return {

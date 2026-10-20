@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -24,7 +24,14 @@ export const TradeBlotter = memo(function TradeBlotter({
   onAmend, onCreate, onViewAudit,
 }: Props) {
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
-  const toast = useToast();
+  const toast  = useToast();
+  const gridRef = useRef<AgGridReact<Trade>>(null);
+
+  const handleExportCsv = useCallback(() => {
+    gridRef.current?.api.exportDataAsCsv({
+      fileName: `trades_${new Date().toISOString().slice(0, 10)}.csv`,
+    });
+  }, []);
 
   const activeTrades  = useMemo(() => trades.filter(t => t.status === 'ACTIVE'), [trades]);
   const totalNotional = useMemo(
@@ -115,6 +122,9 @@ export const TradeBlotter = memo(function TradeBlotter({
           <button className="btn btn-ghost" onClick={refetch} title="Refresh data">
             ↻ Refresh
           </button>
+          <button className="btn btn-ghost" onClick={handleExportCsv} title="Export current view to CSV">
+            ↓ CSV
+          </button>
 
           <div className="blotter-toolbar__spacer" />
 
@@ -142,7 +152,8 @@ export const TradeBlotter = memo(function TradeBlotter({
               <div className="empty-state__desc">Click "New Trade" to add your first trade.</div>
             </div>
           ) : (
-            <AgGridReact
+            <AgGridReact<Trade>
+              ref={gridRef}
               rowData={trades}
               columnDefs={[...colDefs, actionColDef]}
               defaultColDef={{ sortable: true, resizable: true, floatingFilter: true }}

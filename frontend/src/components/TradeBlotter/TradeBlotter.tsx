@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -19,7 +19,7 @@ interface Props {
   onViewAudit: (trade: Trade) => void;
 }
 
-export function TradeBlotter({
+export const TradeBlotter = memo(function TradeBlotter({
   trades, isLoading, error, refetch, cancelTrade,
   onAmend, onCreate, onViewAudit,
 }: Props) {
@@ -32,7 +32,7 @@ export function TradeBlotter({
     [activeTrades],
   );
 
-  const handleCancelConfirmed = async () => {
+  const handleCancelConfirmed = useCallback(async () => {
     const id = pendingCancelId!;
     setPendingCancelId(null);
     try {
@@ -41,7 +41,9 @@ export function TradeBlotter({
     } catch (err) {
       toast('error', 'Cancel failed', err instanceof Error ? err.message : 'Unknown error');
     }
-  };
+  }, [pendingCancelId, cancelTrade, toast]);
+
+  const handleCancelAbort = useCallback(() => setPendingCancelId(null), []);
 
   const actionColDef = useMemo(() => ({
     headerName: 'Actions',
@@ -83,7 +85,7 @@ export function TradeBlotter({
         </div>
       );
     },
-  }), [onAmend, onViewAudit, setPendingCancelId]);
+  }), [onAmend, onViewAudit]);
 
   if (error) {
     return (
@@ -92,7 +94,9 @@ export function TradeBlotter({
           <div className="empty-state__icon">⚠</div>
           <div className="empty-state__title">Failed to load trades</div>
           <div className="empty-state__desc">{String(error)}</div>
-          <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => refetch()}>Retry</button>
+          <button className="btn btn-secondary" style={{ marginTop: 12 }} onClick={() => refetch()}>
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -108,7 +112,7 @@ export function TradeBlotter({
             <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> New Trade
           </button>
           <div className="blotter-toolbar__divider" />
-          <button className="btn btn-ghost" onClick={() => refetch()} title="Refresh data">
+          <button className="btn btn-ghost" onClick={refetch} title="Refresh data">
             ↻ Refresh
           </button>
 
@@ -143,13 +147,19 @@ export function TradeBlotter({
               columnDefs={[...colDefs, actionColDef]}
               defaultColDef={{ sortable: true, resizable: true, floatingFilter: true }}
               getRowClass={(p) => p.data?.status === 'CANCELLED' ? 'ag-row-cancelled' : ''}
+              getRowId={(p) => p.data.id}
+              // Windowing / virtualisation
+              rowBuffer={15}
+              suppressColumnVirtualisation={false}
+              suppressScrollOnNewData={true}
+              debounceVerticalScrollbar={true}
+              // Layout
               pagination
               paginationPageSize={50}
               rowHeight={34}
               headerHeight={34}
               floatingFiltersHeight={30}
               animateRows
-              getRowId={(p) => p.data.id}
             />
           )}
         </div>
@@ -168,9 +178,9 @@ export function TradeBlotter({
           confirmLabel="Cancel Trade"
           cancelLabel="Keep"
           onConfirm={handleCancelConfirmed}
-          onCancel={() => setPendingCancelId(null)}
+          onCancel={handleCancelAbort}
         />
       )}
     </>
   );
-}
+});

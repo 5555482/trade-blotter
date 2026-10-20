@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Trade, TradeAudit } from '../../types/trade';
 import { tradesApi } from '../../api/trades';
 import { formatDate } from '../../utils/formatters';
@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function AuditPanel({ trade, onClose }: Props) {
+export const AuditPanel = memo(function AuditPanel({ trade, onClose }: Props) {
   const [history, setHistory] = useState<TradeAudit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
@@ -112,7 +112,7 @@ export function AuditPanel({ trade, onClose }: Props) {
       </div>
     </div>
   );
-}
+});
 
 function diffFields(before: Trade, after: Trade): { field: string; from: unknown; to: unknown }[] {
   return (Object.keys(after) as (keyof Trade)[])

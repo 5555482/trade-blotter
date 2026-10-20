@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 
 interface Props {
   title: string;
@@ -9,7 +9,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function ConfirmDialog({
+export const ConfirmDialog = memo(function ConfirmDialog({
   title,
   message,
   confirmLabel = 'Confirm',
@@ -51,4 +51,4 @@ export function ConfirmDialog({
       </div>
     </div>
   );
-}
+});

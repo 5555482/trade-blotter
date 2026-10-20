@@ -1,12 +1,32 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
 import { Trade } from './types/trade';
 import { useTrades } from './hooks/useTrades';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ToastProvider } from './context/ToastContext';
 import { TradeBlotter } from './components/TradeBlotter/TradeBlotter';
-import { TradeForm } from './components/TradeForm/TradeForm';
-import { AuditPanel } from './components/AuditPanel/AuditPanel';
 import { formatLargeNotional } from './utils/formatters';
+
+// Lazy-load modals — they're never needed on initial render
+const TradeForm = lazy(() =>
+  import('./components/TradeForm/TradeForm').then(m => ({ default: m.TradeForm }))
+);
+const AuditPanel = lazy(() =>
+  import('./components/AuditPanel/AuditPanel').then(m => ({ default: m.AuditPanel }))
+);
+
+function ModalSpinner() {
+  return (
+    <div className="overlay">
+      <div style={{
+        width: 32, height: 32,
+        border: '3px solid rgba(255,255,255,.15)',
+        borderTopColor: '#fff',
+        borderRadius: '50%',
+        animation: 'spin .7s linear infinite',
+      }} />
+    </div>
+  );
+}
 
 function AppInner() {
   const [formTrade,  setFormTrade]  = useState<Trade | undefined | null>(null);
@@ -20,8 +40,19 @@ function AppInner() {
 
   const { connected } = useWebSocket(applyWsEvent);
 
-  const activeTrades  = trades.filter(t => t.status === 'ACTIVE');
-  const totalNotional = activeTrades.reduce((sum, t) => sum + t.price * t.quantity, 0);
+  // Memoised stats — recomputed only when trades array changes
+  const activeTrades  = useMemo(() => trades.filter(t => t.status === 'ACTIVE'), [trades]);
+  const totalNotional = useMemo(
+    () => activeTrades.reduce((sum, t) => sum + t.price * t.quantity, 0),
+    [activeTrades],
+  );
+
+  // Stable callbacks — memo(TradeBlotter) won't re-render when modals open/close
+  const handleAmend     = useCallback((trade: Trade) => setFormTrade(trade), []);
+  const handleCreate    = useCallback(() => setFormTrade(undefined), []);
+  const handleViewAudit = useCallback((trade: Trade) => setAuditTrade(trade), []);
+  const handleCloseForm  = useCallback(() => setFormTrade(null), []);
+  const handleCloseAudit = useCallback(() => setAuditTrade(null), []);
 
   return (
     <div className="app-shell">
@@ -68,26 +99,27 @@ function AppInner() {
           error={error}
           refetch={refetch}
           cancelTrade={cancelTrade}
-          onAmend={(trade) => setFormTrade(trade)}
-          onCreate={() => setFormTrade(undefined)}
-          onViewAudit={(trade) => setAuditTrade(trade)}
+          onAmend={handleAmend}
+          onCreate={handleCreate}
+          onViewAudit={handleViewAudit}
         />
       </main>
 
-      {formTrade !== null && (
-        <TradeForm
-          trade={formTrade ?? undefined}
-          onClose={() => setFormTrade(null)}
-          createTrade={createTrade}
-          amendTrade={amendTrade}
-          isCreating={isCreating}
-          isAmending={isAmending}
-        />
-      )}
-
-      {auditTrade && (
-        <AuditPanel trade={auditTrade} onClose={() => setAuditTrade(null)} />
-      )}
+      <Suspense fallback={<ModalSpinner />}>
+        {formTrade !== null && (
+          <TradeForm
+            trade={formTrade ?? undefined}
+            onClose={handleCloseForm}
+            createTrade={createTrade}
+            amendTrade={amendTrade}
+            isCreating={isCreating}
+            isAmending={isAmending}
+          />
+        )}
+        {auditTrade && (
+          <AuditPanel trade={auditTrade} onClose={handleCloseAudit} />
+        )}
+      </Suspense>
     </div>
   );
 }

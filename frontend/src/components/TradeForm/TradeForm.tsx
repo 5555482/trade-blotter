@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Trade, CreateTradeInput, AmendTradeInput, TradeSide } from '../../types/trade';
 import { useToast } from '../../context/ToastContext';
 
@@ -29,7 +29,7 @@ function validate(v: Partial<CreateTradeInput>): FormErrors {
   return e;
 }
 
-export function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating, isAmending }: Props) {
+export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating, isAmending }: Props) {
   const isEdit  = !!trade;
   const isBusy  = isCreating || isAmending;
   const toast   = useToast();
@@ -253,7 +253,7 @@ export function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating,
       </div>
     </div>
   );
-}
+});
 
 function Field({
   label, required, error, children,

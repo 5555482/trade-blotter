@@ -40,7 +40,7 @@ export function TradeBlotter({ onAmend, onCreate, onViewAudit }: Props) {
             Amend
           </button>
           <button
-            onClick={() => cancelTrade(trade.id)}
+            onClick={() => cancelTrade(trade.id).catch((err: Error) => alert(err.message))}
             disabled={trade.status === 'CANCELLED'}
             style={btnStyle(trade.status === 'CANCELLED', '#dc2626')}
           >

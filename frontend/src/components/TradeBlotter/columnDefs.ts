@@ -1,12 +1,10 @@
+import React from 'react';
 import { ColDef } from 'ag-grid-community';
 import { Trade } from '../../types/trade';
 import { formatDate, formatPrice, formatQuantity, formatNotional } from '../../utils/formatters';
 
-function badge(cls: string, label: string): HTMLElement {
-  const el = document.createElement('span');
-  el.className = `badge badge-${cls}`;
-  el.textContent = label;
-  return el;
+function badge(cls: string, label: string) {
+  return React.createElement('span', { className: `badge badge-${cls}` }, label);
 }
 
 export const colDefs: ColDef<Trade>[] = [

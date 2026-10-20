@@ -5,8 +5,7 @@ const RECONNECT_DELAY_MS = 3000;
 
 function getWsUrl(): string {
   const host = window.location.hostname;
-  const port = import.meta.env.VITE_WS_PORT ?? '3001';
-  return `ws://${host}:${port}/ws`;
+  return `ws://${host}:3001/ws`;
 }
 
 export function useWebSocket(onEvent: (event: WsEvent) => void): { connected: boolean } {

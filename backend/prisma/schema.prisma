@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Trade {
+  id             String       @id
+  symbol         String
+  quantity       Int
+  price          Float
+  side           String
+  trader         String
+  book           String
+  counterparty   String
+  tradeTimestamp DateTime
+  status         String       @default("ACTIVE")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  audits         TradeAudit[]
+}
+
+model TradeAudit {
+  id         String   @id @default(cuid())
+  tradeId    String
+  trade      Trade    @relation(fields: [tradeId], references: [id])
+  action     String
+  before     String?
+  after      String
+  changedAt  DateTime @default(now())
+}

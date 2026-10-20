@@ -13,17 +13,18 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "cors": "^2.8.5",
+    "dotenv": "^18.0.8",
     "express": "^4.21.1",
     "ws": "^8.18.0",
-    "zod": "^3.23.8",
-    "cors": "^2.8.5"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.13",
     "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/supertest": "^6.0.2",
+    "@types/ws": "^8.5.13",
     "prisma": "^5.22.0",
     "supertest": "^7.0.0",
     "tsx": "^4.19.1",

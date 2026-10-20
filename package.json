@@ -1,0 +1,27 @@
+{
+  "name": "trade-blotter",
+  "version": "1.0.0",
+  "description": "A full-stack equity trade blotter with real-time updates, built as a take-home engineering exercise.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/5555482/trade-blotter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/5555482/trade-blotter/issues"
+  },
+  "homepage": "https://github.com/5555482/trade-blotter#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

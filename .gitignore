@@ -5,3 +5,5 @@ dist/
 *.db-wal
 .env
 .superpowers/
+test-results/
+playwright-report/

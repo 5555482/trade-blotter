@@ -63,7 +63,7 @@ describe('TradeForm — new trade', () => {
   });
 
   it('calls createTrade with correct values when form is fully filled', async () => {
-    const { createTrade, onClose } = setup();
+    const { createTrade } = setup();
 
     // Symbol — first <select> in dialog
     const selects = screen.getAllByRole('combobox');

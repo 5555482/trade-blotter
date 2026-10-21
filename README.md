@@ -62,6 +62,30 @@ To prevent ID collisions after a process restart, the in-memory counter lazy-ini
 
 ---
 
+## Screenshots
+
+**Main blotter — 204 trades, live stats, AG Grid pagination and column filters**
+
+![Trade Blotter main view](docs/screenshots/blotter-main.png)
+
+**Column filter — instant client-side filtering across any field**
+
+![Column filter](docs/screenshots/column-filter.png)
+
+**Amend Trade modal — pre-filled form, saves only changed fields**
+
+![Amend Trade form](docs/screenshots/amend-form.png)
+
+**Cancel Trade confirmation — destructive action guarded by explicit confirmation**
+
+![Cancel Trade dialog](docs/screenshots/cancel-dialog.png)
+
+**Audit Trail — field-level diff with before/after values and timestamps**
+
+![Audit Trail panel](docs/screenshots/audit-trail.png)
+
+---
+
 ## Project Structure
 
 ```

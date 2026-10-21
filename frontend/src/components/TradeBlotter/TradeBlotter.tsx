@@ -10,6 +10,7 @@ import { formatLargeNotional } from '../../utils/formatters';
 
 interface Props {
   trades: Trade[];
+  totalTrades: number;
   isLoading: boolean;
   error: unknown;
   refetch: () => void;
@@ -20,7 +21,7 @@ interface Props {
 }
 
 export const TradeBlotter = memo(function TradeBlotter({
-  trades, isLoading, error, refetch, cancelTrade,
+  trades, totalTrades, isLoading, error, refetch, cancelTrade,
   onAmend, onCreate, onViewAudit,
 }: Props) {
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
@@ -138,8 +139,8 @@ export const TradeBlotter = memo(function TradeBlotter({
               <span className="blotter-toolbar__meta-value">{formatLargeNotional(totalNotional)}</span>
             </span>
             <span className="blotter-toolbar__meta-item">
-              Total
-              <span className="blotter-toolbar__meta-value">{trades.length}</span>
+              Showing
+              <span className="blotter-toolbar__meta-value">{trades.length} of {totalTrades}</span>
             </span>
           </div>
         </div>

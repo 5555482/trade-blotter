@@ -34,11 +34,24 @@ describe('TradeRepository', () => {
     expect(trade.id).toMatch(/^TRD-/);
   });
 
-  it('findAll returns all trades', async () => {
+  it('findAll returns paginated result with correct total', async () => {
     await repo.create({ symbol: 'MSFT', quantity: 100, price: 300, side: 'SELL', trader: 'ABROWN', book: 'EQUITIES_US', counterparty: 'JP Morgan' });
     await repo.create({ symbol: 'TSLA', quantity: 200, price: 350, side: 'BUY', trader: 'MJONES', book: 'TECH_GROWTH', counterparty: 'UBS' });
-    const all = await repo.findAll();
-    expect(all.length).toBe(2);
+    const result = await repo.findAll();
+    expect(result.data.length).toBe(2);
+    expect(result.total).toBe(2);
+    expect(result.page).toBe(1);
+  });
+
+  it('findAll respects pageSize and page', async () => {
+    await repo.create({ symbol: 'MSFT', quantity: 100, price: 300, side: 'SELL', trader: 'ABROWN', book: 'EQUITIES_US', counterparty: 'JP Morgan' });
+    await repo.create({ symbol: 'TSLA', quantity: 200, price: 350, side: 'BUY', trader: 'MJONES', book: 'TECH_GROWTH', counterparty: 'UBS' });
+    const page1 = await repo.findAll(1, 1);
+    expect(page1.data.length).toBe(1);
+    expect(page1.total).toBe(2);
+    const page2 = await repo.findAll(2, 1);
+    expect(page2.data.length).toBe(1);
+    expect(page2.data[0].symbol).not.toBe(page1.data[0].symbol);
   });
 
   it('update amends a trade field', async () => {

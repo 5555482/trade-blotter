@@ -20,6 +20,29 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+describe('GET /api/trades', () => {
+  it('returns paginated response shape', async () => {
+    const res = await request(app).get('/api/trades');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('data');
+    expect(res.body).toHaveProperty('total');
+    expect(res.body).toHaveProperty('page', 1);
+    expect(res.body).toHaveProperty('pageSize', 100);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+
+  it('respects ?pageSize query param', async () => {
+    await request(app).post('/api/trades').send({
+      symbol: 'AAPL', quantity: 100, price: 150, side: 'BUY',
+      trader: 'TUSER', book: 'EQUITIES_UK', counterparty: 'Goldman Sachs',
+    });
+    const res = await request(app).get('/api/trades?pageSize=1');
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBe(1);
+    expect(res.body.pageSize).toBe(1);
+  });
+});
+
 describe('POST /api/trades', () => {
   it('creates a trade with valid body', async () => {
     const res = await request(app).post('/api/trades').send({

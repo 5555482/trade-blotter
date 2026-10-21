@@ -33,7 +33,7 @@ function AppInner() {
   const [auditTrade, setAuditTrade] = useState<Trade | null>(null);
 
   const {
-    trades, isLoading, error, refetch,
+    trades, totalTrades, isLoading, error, refetch,
     applyWsEvent, createTrade, amendTrade, cancelTrade,
     isCreating, isAmending,
   } = useTrades();
@@ -76,7 +76,7 @@ function AppInner() {
           </div>
           <div className="app-header__stat">
             <span className="app-header__stat-label">Total</span>
-            <span className="app-header__stat-value">{trades.length}</span>
+            <span className="app-header__stat-value">{totalTrades}</span>
           </div>
           <div className="app-header__stat">
             <span className="app-header__stat-label">Notional</span>
@@ -95,6 +95,7 @@ function AppInner() {
       <main className="app-main">
         <TradeBlotter
           trades={trades}
+          totalTrades={totalTrades}
           isLoading={isLoading}
           error={error}
           refetch={refetch}

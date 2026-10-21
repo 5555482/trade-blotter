@@ -8,8 +8,10 @@ import { asyncHandler } from '../lib/async-handler';
 export function createTradeRouter(service: TradeService, broadcaster: Broadcaster): Router {
   const router = Router();
 
-  router.get('/', asyncHandler(async (_req, res) => {
-    res.json(await service.getAll());
+  router.get('/', asyncHandler(async (req, res) => {
+    const page     = Math.max(1, parseInt(req.query['page']     as string) || 1);
+    const pageSize = Math.min(500, Math.max(1, parseInt(req.query['pageSize'] as string) || 100));
+    res.json(await service.getAll(page, pageSize));
   }));
 
   router.get('/:id', asyncHandler(async (req, res) => {

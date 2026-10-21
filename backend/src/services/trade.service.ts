@@ -1,6 +1,6 @@
 import { TradeRepository } from '../repositories/trade.repo';
 import { AuditService } from './audit.service';
-import { Trade, CreateTradeInput, AmendTradeInput } from '../types';
+import { Trade, CreateTradeInput, AmendTradeInput, PagedTrades } from '../types';
 
 function httpError(message: string, statusCode: number): Error {
   const err = new Error(message) as Error & { statusCode: number };
@@ -14,8 +14,8 @@ export class TradeService {
     private readonly audit: AuditService,
   ) {}
 
-  async getAll(): Promise<Trade[]> {
-    return this.repo.findAll();
+  async getAll(page = 1, pageSize = 100): Promise<PagedTrades> {
+    return this.repo.findAll(page, pageSize);
   }
 
   async getById(id: string): Promise<Trade> {

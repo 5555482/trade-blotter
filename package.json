@@ -6,6 +6,11 @@
   "directories": {
     "doc": "docs"
   },
+  "workspaces": [
+    "shared",
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "test:e2e": "playwright test"
   },

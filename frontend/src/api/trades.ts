@@ -1,4 +1,4 @@
-import { Trade, TradeAudit, CreateTradeInput, AmendTradeInput } from '../types/trade';
+import { Trade, TradeAudit, CreateTradeInput, AmendTradeInput, PagedTrades } from '../types/trade';
 
 const BASE = '/api';
 
@@ -13,8 +13,8 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const tradesApi = {
-  getAll: (): Promise<Trade[]> =>
-    fetch(`${BASE}/trades`).then(handleResponse<Trade[]>),
+  getAll: (page = 1, pageSize = 100): Promise<PagedTrades> =>
+    fetch(`${BASE}/trades?page=${page}&pageSize=${pageSize}`).then(handleResponse<PagedTrades>),
 
   getById: (id: string): Promise<Trade> =>
     fetch(`${BASE}/trades/${id}`).then(handleResponse<Trade>),

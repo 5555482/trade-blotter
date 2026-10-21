@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { Trade, CreateTradeInput, AmendTradeInput, TradeSide, TradeStatus } from '../types';
+import { Trade, CreateTradeInput, AmendTradeInput, PagedTrades, TradeSide, TradeStatus } from '../types';
 
 function toTradeDTO(raw: {
   id: string; symbol: string; quantity: number; price: number;
@@ -34,9 +34,16 @@ async function nextId(db: PrismaClient): Promise<string> {
 export class TradeRepository {
   constructor(private readonly db: PrismaClient) {}
 
-  async findAll(): Promise<Trade[]> {
-    const rows = await this.db.trade.findMany({ orderBy: { tradeTimestamp: 'desc' } });
-    return rows.map(toTradeDTO);
+  async findAll(page = 1, pageSize = 100): Promise<PagedTrades> {
+    const [rows, total] = await Promise.all([
+      this.db.trade.findMany({
+        orderBy: { tradeTimestamp: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+      }),
+      this.db.trade.count(),
+    ]);
+    return { data: rows.map(toTradeDTO), total, page, pageSize };
   }
 
   async findById(id: string): Promise<Trade | null> {

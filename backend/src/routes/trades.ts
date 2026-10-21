@@ -13,7 +13,7 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
   }));
 
   router.get('/:id', asyncHandler(async (req, res) => {
-    res.json(await service.getById(req.params.id as string));
+    res.json(await service.getById(req.params.id));
   }));
 
   router.post('/', asyncHandler(async (req, res) => {
@@ -33,13 +33,13 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
       res.status(400).json({ error: parsed.error.flatten() });
       return;
     }
-    const trade = await service.amend(req.params.id as string, parsed.data);
+    const trade = await service.amend(req.params.id, parsed.data);
     broadcaster.broadcast({ type: 'TRADE_AMENDED', payload: trade } satisfies WsEvent);
     res.json(trade);
   }));
 
   router.post('/:id/cancel', asyncHandler(async (req, res) => {
-    const trade = await service.cancel(req.params.id as string);
+    const trade = await service.cancel(req.params.id);
     broadcaster.broadcast({ type: 'TRADE_CANCELLED', payload: trade } satisfies WsEvent);
     res.json(trade);
   }));

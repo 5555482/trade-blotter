@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { TradeRepository } from './repositories/trade.repo';
 import { AuditRepository } from './repositories/audit.repo';
@@ -14,6 +15,20 @@ export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): expre
 
   app.use(cors({ origin: 'http://localhost:5173' }));
   app.use(express.json());
+
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+  });
+
+  if (process.env.NODE_ENV !== 'test') {
+    app.use('/api/', rateLimit({
+      windowMs: 60_000,
+      max: 200,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many requests, please try again later.' },
+    }));
+  }
 
   const tradeRepo = new TradeRepository(prisma);
   const auditRepo = new AuditRepository(prisma);

@@ -20,6 +20,15 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+describe('GET /health', () => {
+  it('returns status ok and uptime', async () => {
+    const res = await request(app).get('/health');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.uptime).toBe('number');
+  });
+});
+
 describe('GET /api/trades', () => {
   it('returns paginated response shape', async () => {
     const res = await request(app).get('/api/trades');

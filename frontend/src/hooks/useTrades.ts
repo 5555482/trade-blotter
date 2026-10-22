@@ -10,7 +10,7 @@ export function useTrades() {
 
   const { data: result, isLoading, error, refetch } = useQuery({
     queryKey: TRADES_KEY,
-    queryFn: () => tradesApi.getAll(),
+    queryFn: () => tradesApi.getAll(1, 5000),
   });
 
   const trades      = result?.data      ?? [];

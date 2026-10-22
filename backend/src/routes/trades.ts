@@ -10,7 +10,7 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
 
   router.get('/', asyncHandler(async (req, res) => {
     const page     = Math.max(1, parseInt(req.query['page']     as string) || 1);
-    const pageSize = Math.min(500, Math.max(1, parseInt(req.query['pageSize'] as string) || 100));
+    const pageSize = Math.min(10000, Math.max(1, parseInt(req.query['pageSize'] as string) || 100));
     res.json(await service.getAll(page, pageSize));
   }));
 

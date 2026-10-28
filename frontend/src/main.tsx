@@ -11,11 +11,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: 32, fontFamily: 'monospace', color: '#dc2626', background: '#fff' }}>
-          <h2>Render Error</h2>
-          <pre style={{ marginTop: 12, whiteSpace: 'pre-wrap', fontSize: 13 }}>
-            {(this.state.error as Error).stack}
-          </pre>
+        <div style={{ padding: 32, fontFamily: 'sans-serif', background: '#fff' }}>
+          <h2 style={{ color: '#dc2626' }}>Something went wrong</h2>
+          <p style={{ color: '#374151', marginTop: 8 }}>
+            Please refresh the page. If the problem persists, contact support.
+          </p>
+          {import.meta.env.DEV && (
+            <pre style={{ marginTop: 16, whiteSpace: 'pre-wrap', fontSize: 12, color: '#dc2626' }}>
+              {(this.state.error as Error).stack}
+            </pre>
+          )}
         </div>
       );
     }

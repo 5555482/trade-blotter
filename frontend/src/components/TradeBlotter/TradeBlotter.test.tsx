@@ -30,11 +30,19 @@ function setup(props: Partial<React.ComponentProps<typeof TradeBlotter>> = {}) {
   const onAmend     = vi.fn();
   const onViewAudit = vi.fn();
 
+  const trades = props.trades ?? [activeTrade];
+  const defaultActiveTrades  = trades.filter(t => t.status === 'ACTIVE').length;
+  const defaultTotalNotional = trades
+    .filter(t => t.status === 'ACTIVE')
+    .reduce((sum, t) => sum + t.price * t.quantity, 0);
+
   const { container } = render(
     <ToastProvider>
       <TradeBlotter
-        trades={[activeTrade]}
+        trades={trades}
         totalTrades={1}
+        activeTrades={defaultActiveTrades}
+        totalNotional={defaultTotalNotional}
         isLoading={false}
         error={null}
         refetch={refetch}

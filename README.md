@@ -62,6 +62,61 @@ To prevent ID collisions after a process restart, the in-memory counter lazy-ini
 
 ---
 
+### State Management
+
+The app uses four distinct layers — each owns a specific concern.
+
+**1. Server state — TanStack Query (`useTrades`, `useAuditHistory`)**
+
+The heaviest layer. Manages everything that comes from the backend.
+
+```
+TanStack Query cache
+  ├── ['trades']        → paginated trade list
+  └── ['audit', id]     → audit history per trade
+```
+
+TanStack Query handles background refetching (stale after 30 s), loading/error states, and optimistic updates on amend. WebSocket events patch the cache directly via `applyWsEvent` — no extra fetch needed, the grid updates instantly.
+
+**2. Real-time sync — WebSocket (`useWebSocket`)**
+
+Bridges server push to the Query cache. On each `TRADE_CREATED / TRADE_AMENDED / TRADE_CANCELLED` event it calls `queryClient.setQueryData`, updating the grid without a round-trip. On reconnect, `invalidateQueries` triggers a full refetch to catch any missed events.
+
+**3. Auth state — React Context (`AuthContext`)**
+
+Single piece of global UI state: the JWT token.
+
+```
+AuthContext
+  ├── token: string | null   ← null = show LoginPage, string = show app
+  ├── login()                ← calls POST /api/auth/login, stores token
+  └── logout()               ← clears token, returns to LoginPage
+```
+
+Token lives **in memory only** (React `useState` — never `localStorage`). `useEffect` in `App` syncs it into the API module via `setAuthToken()` so every fetch automatically includes `Authorization: Bearer <token>`. Storing the token in memory rather than `localStorage` prevents XSS scripts from reading it.
+
+**4. Local UI state — `useState` in components**
+
+Ephemeral, component-scoped, never shared upward.
+
+| State | Where | What |
+|---|---|---|
+| `formTrade` | `App` | Which trade the TradeForm modal is editing (`null` = closed) |
+| `auditTrade` | `App` | Which trade the AuditPanel is showing |
+| `pendingId` | `useCancelFlow` | ID of trade awaiting cancel confirmation |
+| `values / errors / touched` | `TradeForm` | Form field state |
+| `username / password / error` | `LoginPage` | Login form state |
+
+**Why no Redux / Zustand?**
+
+- Async/server state is handled better by TanStack Query than a manual store
+- The only true global state is the auth token — one `createContext` is sufficient
+- Local UI state (modals, forms) has no reason to be global
+
+The pattern is: **TanStack Query for server state → Context for auth → `useState` for UI**.
+
+---
+
 ## Screenshots
 
 **Main blotter — 204 trades, live stats, AG Grid pagination and column filters**
@@ -109,7 +164,10 @@ trade-blotter/
 │   │   ├── services/
 │   │   │   ├── trade.service.ts# Business rules; broadcasts WS events
 │   │   │   └── audit.service.ts# Audit history retrieval
+│   │   ├── middleware/
+│   │   │   └── auth.ts         # requireAuth (JWT verify) + signToken
 │   │   ├── routes/
+│   │   │   ├── auth.ts         # POST /api/auth/login
 │   │   │   ├── trades.ts       # GET /api/trades, POST, PATCH /:id, POST /:id/cancel
 │   │   │   └── audit.ts        # GET /api/audit/:tradeId
 │   │   ├── validation/
@@ -127,17 +185,24 @@ trade-blotter/
 │       ├── main.tsx            # ReactDOM.createRoot + ErrorBoundary
 │       ├── App.tsx             # Root: useTrades + useWebSocket + lazy modals
 │       ├── types/trade.ts      # Frontend-side Trade, TradeAudit, WsEvent types
-│       ├── api/trades.ts       # fetch wrappers for all REST endpoints
+│       ├── api/
+│       │   ├── auth.ts         # POST /api/auth/login fetch wrapper
+│       │   └── trades.ts       # fetch wrappers for all trade/audit endpoints (attaches Bearer token)
 │       ├── context/
+│       │   ├── AuthContext.tsx  # Token in memory, login/logout, useAuth hook
 │       │   └── ToastContext.tsx # Toast provider + useToast hook
 │       ├── hooks/
 │       │   ├── useTrades.ts    # TanStack Query: queries + optimistic mutations
+│       │   ├── useAuditHistory.ts # TanStack Query: audit history per trade
+│       │   ├── useCancelFlow.ts   # Container hook: pendingId + confirm/abort callbacks
 │       │   └── useWebSocket.ts # WS connection with exponential reconnect
 │       ├── components/
-│       │   ├── TradeBlotter/   # AG Grid table, toolbar, CSV export, confirm dialog
-│       │   ├── TradeForm/      # Create / amend modal with per-field validation
+│       │   ├── TradeBlotter/   # AG Grid table, toolbar, CSV export
+│       │   ├── TradeForm/      # Create / amend modal — Field compound component (slot pattern)
 │       │   ├── AuditPanel/     # Timeline view of audit history for a trade
-│       │   └── ConfirmDialog/  # Reusable destructive-action confirmation dialog
+│       │   ├── ConfirmDialog/  # Destructive-action confirmation dialog
+│       │   ├── Modal/          # Compound modal (Modal.Header / .Body / .Footer) with focus trap
+│       │   └── LoginPage/      # Username + password login form
 │       └── utils/
 │           └── formatters.ts   # formatPrice, formatNotional, formatLargeNotional, formatDate
 ├── database/                   # SQLite file written here at runtime (Docker volume mount)
@@ -221,13 +286,16 @@ docker-compose up --build
 
 ## API Reference
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/trades` | All trades, newest first |
-| `POST` | `/api/trades` | Create a trade |
-| `PATCH` | `/api/trades/:id` | Amend a trade (partial update — only provided fields are changed) |
-| `POST` | `/api/trades/:id/cancel` | Cancel a trade (terminal; cannot be reversed) |
-| `GET` | `/api/audit/:tradeId` | Audit history for a trade, newest first |
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | No | Returns a JWT (`{ token }`) for valid credentials |
+| `GET` | `/api/trades` | Yes | All trades, newest first |
+| `POST` | `/api/trades` | Yes | Create a trade |
+| `PATCH` | `/api/trades/:id` | Yes | Amend a trade (partial update — only provided fields are changed) |
+| `POST` | `/api/trades/:id/cancel` | Yes | Cancel a trade (terminal; cannot be reversed) |
+| `GET` | `/api/audit/:tradeId` | Yes | Audit history for a trade, newest first |
+
+All protected routes require an `Authorization: Bearer <token>` header. Omitting it returns `401`. Default local credentials: `admin` / `password` (override via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars).
 
 ### WebSocket
 
@@ -243,7 +311,7 @@ All connected clients receive the event so every open browser tab stays in sync 
 
 ## Running Tests
 
-### Backend (unit + integration — 17 tests)
+### Backend (unit + integration — 24 tests)
 
 ```bash
 cd backend
@@ -293,7 +361,7 @@ GitHub Actions runs both jobs on every push and pull request to `main`:
 
 7. **WebSocket reconnects are the client's responsibility.** `useWebSocket` implements exponential back-off (1 s → 2 s → 4 s … capped at 30 s). The server does not buffer missed events; on reconnect TanStack Query refetches the full trade list via `invalidateQueries`.
 
-8. **No authentication or authorisation.** The API is completely open. Adding auth would be the immediate next step before any production deployment.
+8. **Single admin account.** Authentication is implemented with a single username/password pair from env vars. A production deployment would use a proper user store with hashed passwords (e.g. bcrypt) and role-based access.
 
 ---
 
@@ -307,6 +375,6 @@ GitHub Actions runs both jobs on every push and pull request to `main`:
 | **Append-only audit without archiving** | Perfect audit integrity; simple query | The `TradeAudit` table grows without bound; pruning/archiving would need a separate migration strategy |
 | **AG Grid Community (not Enterprise)** | Free, no licence required | Server-side row model, advanced clipboard, Excel export, and row grouping are Enterprise-only |
 | **Optimistic create not implemented** | Kept complexity focused on meaningful cases | A create mutation is not optimistic — the server-assigned ID is unknown until the response arrives, so the row appears after the round-trip |
-| **No authentication** | Kept scope focused for the exercise | The API is completely open; not safe to expose publicly without adding an auth layer |
+| **JWT in memory, not localStorage** | Immune to XSS token theft — no script can read in-memory React state | Token lost on page refresh — user must log in again; a refresh-token flow would fix this |
 | **CSS custom properties without a component library** | Full control; no external CSS dependency | More CSS to maintain; accessible components (focus management, ARIA live regions) implemented manually — only ConfirmDialog and modals have keyboard handling |
 | **`React.lazy` for modals only** | Smaller initial bundle; TradeForm and AuditPanel load on demand | Main bundle still includes the blotter and all AG Grid code; route-based splitting would reduce it further |

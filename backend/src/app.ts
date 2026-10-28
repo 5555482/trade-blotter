@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { TradeRepository } from './repositories/trade.repo';
@@ -13,7 +14,8 @@ import { createAuditRouter } from './routes/audit';
 export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): express.Application {
   const app = express();
 
-  app.use(cors({ origin: 'http://localhost:5173' }));
+  app.use(helmet());
+  app.use(cors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' }));
   app.use(express.json());
 
   app.get('/health', (_req, res) => {
@@ -40,7 +42,9 @@ export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): expre
 
   app.use((err: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.statusCode ?? 500;
-    res.status(status).json({ error: err.message });
+    // Only surface the message for intentional HTTP errors; hide internals on unexpected 500s
+    const message = status < 500 ? err.message : 'Internal server error';
+    res.status(status).json({ error: message });
   });
 
   return app;

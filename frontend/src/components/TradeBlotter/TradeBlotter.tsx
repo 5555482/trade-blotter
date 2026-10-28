@@ -11,6 +11,8 @@ import { formatLargeNotional } from '../../utils/formatters';
 interface Props {
   trades: Trade[];
   totalTrades: number;
+  activeTrades: number;
+  totalNotional: number;
   isLoading: boolean;
   error: unknown;
   refetch: () => void;
@@ -21,7 +23,7 @@ interface Props {
 }
 
 export const TradeBlotter = memo(function TradeBlotter({
-  trades, totalTrades, isLoading, error, refetch, cancelTrade,
+  trades, totalTrades, activeTrades, totalNotional, isLoading, error, refetch, cancelTrade,
   onAmend, onCreate, onViewAudit,
 }: Props) {
   const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
@@ -33,12 +35,6 @@ export const TradeBlotter = memo(function TradeBlotter({
       fileName: `trades_${new Date().toISOString().slice(0, 10)}.csv`,
     });
   }, []);
-
-  const activeTrades  = useMemo(() => trades.filter(t => t.status === 'ACTIVE'), [trades]);
-  const totalNotional = useMemo(
-    () => activeTrades.reduce((sum, t) => sum + t.price * t.quantity, 0),
-    [activeTrades],
-  );
 
   const handleCancelConfirmed = useCallback(async () => {
     const id = pendingCancelId!;
@@ -93,7 +89,7 @@ export const TradeBlotter = memo(function TradeBlotter({
         </div>
       );
     },
-  }), [onAmend, onViewAudit]);
+  }), [onAmend, onViewAudit, setPendingCancelId]);
 
   if (error) {
     return (
@@ -132,7 +128,7 @@ export const TradeBlotter = memo(function TradeBlotter({
           <div className="blotter-toolbar__meta">
             <span className="blotter-toolbar__meta-item">
               Active
-              <span className="blotter-toolbar__meta-value">{activeTrades.length}</span>
+              <span className="blotter-toolbar__meta-value">{activeTrades}</span>
             </span>
             <span className="blotter-toolbar__meta-item">
               Notional

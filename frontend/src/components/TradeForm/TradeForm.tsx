@@ -56,18 +56,22 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
   const set = (key: keyof CreateTradeInput) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
       const val = e.target.type === 'number' ? parseFloat(e.target.value) || undefined : e.target.value;
-      setValues(prev => ({ ...prev, [key]: val }));
-      if (touched[key]) {
-        const errs = validate({ ...values, [key]: val });
-        setErrors(prev => ({ ...prev, [key]: errs[key] }));
-      }
+      setValues(prev => {
+        const next = { ...prev, [key]: val };
+        if (touched[key]) {
+          setErrors(errs => ({ ...errs, [key]: validate(next)[key] }));
+        }
+        return next;
+      });
     };
 
   const blur = (key: string) => () => {
     setTouched(prev => ({ ...prev, [key]: true }));
     if (!isEdit) {
-      const errs = validate(values);
-      setErrors(prev => ({ ...prev, [key]: errs[key] }));
+      setValues(curr => {
+        setErrors(errs => ({ ...errs, [key]: validate(curr)[key] }));
+        return curr;
+      });
     }
   };
 

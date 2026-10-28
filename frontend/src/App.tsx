@@ -96,6 +96,8 @@ function AppInner() {
         <TradeBlotter
           trades={trades}
           totalTrades={totalTrades}
+          activeTrades={activeTrades.length}
+          totalNotional={totalNotional}
           isLoading={isLoading}
           error={error}
           refetch={refetch}

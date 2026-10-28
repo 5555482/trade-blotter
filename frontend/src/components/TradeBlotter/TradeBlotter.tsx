@@ -80,7 +80,7 @@ export const TradeBlotter = memo(function TradeBlotter({
   if (error) {
     return (
       <div className="blotter-card">
-        <div className="empty-state">
+        <div className="empty-state" role="alert">
           <div className="empty-state__icon">⚠</div>
           <div className="empty-state__title">Failed to load trades</div>
           <div className="empty-state__desc">{String(error)}</div>

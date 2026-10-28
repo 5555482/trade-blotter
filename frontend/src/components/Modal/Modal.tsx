@@ -1,8 +1,9 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 
 interface ModalProps {
   onClose: () => void;
   labelId?: string;
+  describedById?: string;
   canClose?: boolean;
   children: React.ReactNode;
 }
@@ -24,10 +25,34 @@ interface FooterProps {
   children: React.ReactNode;
 }
 
-function ModalRoot({ onClose, labelId, canClose = true, children }: ModalProps) {
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function ModalRoot({ onClose, labelId, describedById, canClose = true, children }: ModalProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  // Restore focus to the element that was active before the modal opened
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    return () => trigger?.focus();
+  }, []);
+
+  // Escape key + Tab focus trap
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && canClose) onClose();
+      if (e.key === 'Escape' && canClose) { onClose(); return; }
+      if (e.key !== 'Tab' || !overlayRef.current) return;
+
+      const focusable = Array.from(overlayRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last  = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -35,10 +60,12 @@ function ModalRoot({ onClose, labelId, canClose = true, children }: ModalProps) 
 
   return (
     <div
+      ref={overlayRef}
       className="overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelId}
+      aria-describedby={describedById}
       onClick={(e) => { if (e.target === e.currentTarget && canClose) onClose(); }}
     >
       {children}

@@ -23,12 +23,12 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   useEffect(() => { cancelRef.current?.focus(); }, []);
 
   return (
-    <Modal onClose={onCancel} labelId="confirm-title">
+    <Modal onClose={onCancel} labelId="confirm-title" describedById="confirm-message">
       <div className="modal modal--sm">
         <Modal.Body style={{ paddingTop: 22 }}>
           <div className="confirm__icon">⚠</div>
           <h2 id="confirm-title" className="confirm__title">{title}</h2>
-          <p className="confirm__message">{message}</p>
+          <p id="confirm-message" className="confirm__message">{message}</p>
         </Modal.Body>
         <Modal.Footer>
           <button ref={cancelRef} className="btn btn-secondary" onClick={onCancel}>

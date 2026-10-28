@@ -1,6 +1,7 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { Trade, CreateTradeInput, AmendTradeInput, TradeSide } from '../../types/trade';
 import { useToast } from '../../context/ToastContext';
+import { Modal } from '../Modal/Modal';
 
 interface Props {
   trade?: Trade;
@@ -46,12 +47,6 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
   const [errors,      setErrors]      = useState<FormErrors>({});
   const [touched,     setTouched]     = useState<Partial<Record<string, boolean>>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !isBusy) onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, isBusy]);
 
   const set = (key: keyof CreateTradeInput) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -113,26 +108,17 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
   const fieldError = (key: string) => touched[key] && errors[key];
 
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="form-title"
-      onClick={(e) => { if (e.target === e.currentTarget && !isBusy) onClose(); }}
-    >
+    <Modal onClose={onClose} labelId="form-title" canClose={!isBusy}>
       <div className="modal">
-        <div className="modal__header">
-          <div>
-            <h2 id="form-title" className="modal__title">
-              {isEdit ? 'Amend Trade' : 'New Trade'}
-            </h2>
-            {isEdit && <div className="modal__subtitle">{trade.id}</div>}
-          </div>
-          <button className="modal__close-btn" onClick={onClose} disabled={isBusy} aria-label="Close">×</button>
-        </div>
-
+        <Modal.Header
+          id="form-title"
+          title={isEdit ? 'Amend Trade' : 'New Trade'}
+          subtitle={isEdit ? trade.id : undefined}
+          onClose={onClose}
+          disabled={isBusy}
+        />
         <form onSubmit={handleSubmit} noValidate>
-          <div className="modal__body">
+          <Modal.Body>
             <div className="form-section-label">Instrument</div>
             <div className="form-row">
               <Field label="Symbol" required error={fieldError('symbol')}>
@@ -236,9 +222,9 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
                 {submitError}
               </div>
             )}
-          </div>
+          </Modal.Body>
 
-          <div className="modal__footer">
+          <Modal.Footer>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isBusy}>
               Discard
             </button>
@@ -252,10 +238,10 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
                 isEdit ? 'Save Changes' : 'Create Trade'
               )}
             </button>
-          </div>
+          </Modal.Footer>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 });
 

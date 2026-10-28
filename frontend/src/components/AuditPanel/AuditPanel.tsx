@@ -1,6 +1,7 @@
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { Trade } from '../../types/trade';
 import { useAuditHistory } from '../../hooks/useAuditHistory';
+import { Modal } from '../Modal/Modal';
 import { formatDate } from '../../utils/formatters';
 
 interface Props {
@@ -12,20 +13,8 @@ export const AuditPanel = memo(function AuditPanel({ trade, onClose }: Props) {
   const { data: history = [], isLoading: loading, error: queryError } = useAuditHistory(trade.id);
   const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="audit-title"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <Modal onClose={onClose} labelId="audit-title">
       <div className="audit-panel">
         <div className="audit-panel__header">
           <div>
@@ -97,7 +86,7 @@ export const AuditPanel = memo(function AuditPanel({ trade, onClose }: Props) {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 });
 

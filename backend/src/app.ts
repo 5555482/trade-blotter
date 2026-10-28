@@ -10,6 +10,8 @@ import { AuditService } from './services/audit.service';
 import { Broadcaster } from './websocket/broadcaster';
 import { createTradeRouter } from './routes/trades';
 import { createAuditRouter } from './routes/audit';
+import { createAuthRouter } from './routes/auth';
+import { requireAuth } from './middleware/auth';
 
 export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): express.Application {
   const app = express();
@@ -37,8 +39,9 @@ export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): expre
   const auditService = new AuditService(auditRepo);
   const tradeService = new TradeService(tradeRepo, auditService);
 
-  app.use('/api/trades', createTradeRouter(tradeService, broadcaster));
-  app.use('/api/audit', createAuditRouter(auditService));
+  app.use('/api/auth', createAuthRouter());
+  app.use('/api/trades', requireAuth, createTradeRouter(tradeService, broadcaster));
+  app.use('/api/audit', requireAuth, createAuditRouter(auditService));
 
   app.use((err: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.statusCode ?? 500;

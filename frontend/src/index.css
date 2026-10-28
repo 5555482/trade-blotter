@@ -633,3 +633,33 @@ body {
 
 /* Monospace columns */
 .col-mono { font-family: var(--font-mono); font-size: 12px; }
+
+/* ── Login Page ─────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-page);
+}
+
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 40px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.login-form { display: flex; flex-direction: column; gap: 16px; }
+
+.login-form__submit { width: 100%; justify-content: center; margin-top: 4px; }

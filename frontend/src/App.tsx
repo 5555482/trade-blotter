@@ -1,10 +1,13 @@
-import { lazy, Suspense, useState, useCallback, useMemo } from 'react';
+import { lazy, Suspense, useState, useCallback, useMemo, useEffect } from 'react';
 import { Trade } from './types/trade';
 import { useTrades } from './hooks/useTrades';
 import { useWebSocket } from './hooks/useWebSocket';
 import { ToastProvider } from './context/ToastContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginPage } from './components/LoginPage/LoginPage';
 import { TradeBlotter } from './components/TradeBlotter/TradeBlotter';
 import { formatLargeNotional } from './utils/formatters';
+import { setAuthToken } from './api/trades';
 
 // Lazy-load modals — they're never needed on initial render
 const TradeForm = lazy(() =>
@@ -29,8 +32,12 @@ function ModalSpinner() {
 }
 
 function AppInner() {
+  const { token, logout } = useAuth();
   const [formTrade,  setFormTrade]  = useState<Trade | undefined | null>(null);
   const [auditTrade, setAuditTrade] = useState<Trade | null>(null);
+
+  // Keep the API module in sync with the current token
+  useEffect(() => { setAuthToken(token); }, [token]);
 
   const {
     trades, totalTrades, isLoading, error, refetch,
@@ -90,6 +97,10 @@ function AppInner() {
           <span className="ws-pill__dot" />
           <span className="ws-pill__text">{connected ? 'Live' : 'Reconnecting…'}</span>
         </div>
+
+        <button className="btn btn-ghost" onClick={logout} style={{ marginLeft: 8 }}>
+          Sign out
+        </button>
       </header>
 
       <main className="app-main">
@@ -127,10 +138,20 @@ function AppInner() {
   );
 }
 
-export function App() {
+function AuthGate() {
+  const { token } = useAuth();
+  if (!token) return <LoginPage />;
   return (
     <ToastProvider>
       <AppInner />
     </ToastProvider>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
   );
 }

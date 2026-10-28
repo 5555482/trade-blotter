@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
+import { Modal } from '../Modal/Modal';
 
 interface Props {
   title: string;
@@ -19,36 +20,25 @@ export const ConfirmDialog = memo(function ConfirmDialog({
 }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    cancelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  useEffect(() => { cancelRef.current?.focus(); }, []);
 
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
+    <Modal onClose={onCancel} labelId="confirm-title">
       <div className="modal modal--sm">
-        <div className="modal__body" style={{ paddingTop: 22 }}>
+        <Modal.Body style={{ paddingTop: 22 }}>
           <div className="confirm__icon">⚠</div>
           <h2 id="confirm-title" className="confirm__title">{title}</h2>
           <p className="confirm__message">{message}</p>
-        </div>
-        <div className="modal__footer">
+        </Modal.Body>
+        <Modal.Footer>
           <button ref={cancelRef} className="btn btn-secondary" onClick={onCancel}>
             {cancelLabel}
           </button>
           <button className="btn btn-danger-fill" onClick={onConfirm}>
             {confirmLabel}
           </button>
-        </div>
+        </Modal.Footer>
       </div>
-    </div>
+    </Modal>
   );
 });

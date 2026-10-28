@@ -1,16 +1,18 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import { Trade } from '../../types/trade';
 import { colDefs } from './columnDefs';
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog';
-import { useToast } from '../../context/ToastContext';
+import { useCancelFlow } from '../../hooks/useCancelFlow';
 import { formatLargeNotional } from '../../utils/formatters';
 
 interface Props {
   trades: Trade[];
   totalTrades: number;
+  activeTrades: number;
+  totalNotional: number;
   isLoading: boolean;
   error: unknown;
   refetch: () => void;
@@ -21,11 +23,10 @@ interface Props {
 }
 
 export const TradeBlotter = memo(function TradeBlotter({
-  trades, totalTrades, isLoading, error, refetch, cancelTrade,
+  trades, totalTrades, activeTrades, totalNotional, isLoading, error, refetch, cancelTrade,
   onAmend, onCreate, onViewAudit,
 }: Props) {
-  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
-  const toast  = useToast();
+  const { pendingId, request: requestCancel, confirm: confirmCancel, abort: abortCancel } = useCancelFlow(cancelTrade);
   const gridRef = useRef<AgGridReact<Trade>>(null);
 
   const handleExportCsv = useCallback(() => {
@@ -33,25 +34,6 @@ export const TradeBlotter = memo(function TradeBlotter({
       fileName: `trades_${new Date().toISOString().slice(0, 10)}.csv`,
     });
   }, []);
-
-  const activeTrades  = useMemo(() => trades.filter(t => t.status === 'ACTIVE'), [trades]);
-  const totalNotional = useMemo(
-    () => activeTrades.reduce((sum, t) => sum + t.price * t.quantity, 0),
-    [activeTrades],
-  );
-
-  const handleCancelConfirmed = useCallback(async () => {
-    const id = pendingCancelId!;
-    setPendingCancelId(null);
-    try {
-      await cancelTrade(id);
-      toast('success', 'Trade cancelled', id);
-    } catch (err) {
-      toast('error', 'Cancel failed', err instanceof Error ? err.message : 'Unknown error');
-    }
-  }, [pendingCancelId, cancelTrade, toast]);
-
-  const handleCancelAbort = useCallback(() => setPendingCancelId(null), []);
 
   const actionColDef = useMemo(() => ({
     headerName: 'Actions',
@@ -76,7 +58,7 @@ export const TradeBlotter = memo(function TradeBlotter({
           </button>
           <button
             className="btn btn-sm btn-danger"
-            onClick={() => setPendingCancelId(trade.id)}
+            onClick={() => requestCancel(trade.id)}
             disabled={cancelled}
             title="Cancel trade"
           >
@@ -93,7 +75,7 @@ export const TradeBlotter = memo(function TradeBlotter({
         </div>
       );
     },
-  }), [onAmend, onViewAudit]);
+  }), [onAmend, onViewAudit, requestCancel]);
 
   if (error) {
     return (
@@ -132,7 +114,7 @@ export const TradeBlotter = memo(function TradeBlotter({
           <div className="blotter-toolbar__meta">
             <span className="blotter-toolbar__meta-item">
               Active
-              <span className="blotter-toolbar__meta-value">{activeTrades.length}</span>
+              <span className="blotter-toolbar__meta-value">{activeTrades}</span>
             </span>
             <span className="blotter-toolbar__meta-item">
               Notional
@@ -177,20 +159,20 @@ export const TradeBlotter = memo(function TradeBlotter({
         </div>
       </div>
 
-      {pendingCancelId && (
+      {pendingId && (
         <ConfirmDialog
           title="Cancel Trade"
           message={
             <>
               Are you sure you want to cancel{' '}
-              <span className="confirm__id">{pendingCancelId}</span>?{' '}
+              <span className="confirm__id">{pendingId}</span>?{' '}
               This action cannot be undone.
             </>
           }
           confirmLabel="Cancel Trade"
           cancelLabel="Keep"
-          onConfirm={handleCancelConfirmed}
-          onCancel={handleCancelAbort}
+          onConfirm={confirmCancel}
+          onCancel={abortCancel}
         />
       )}
     </>

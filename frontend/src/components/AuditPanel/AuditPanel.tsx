@@ -1,35 +1,22 @@
-import { memo, useEffect, useState } from 'react';
-import { Trade, TradeAudit } from '../../types/trade';
-import { tradesApi } from '../../api/trades';
+import { memo, useEffect } from 'react';
+import { Trade } from '../../types/trade';
+import { useAuditHistory } from '../../hooks/useAuditHistory';
 import { formatDate } from '../../utils/formatters';
 
 interface Props {
-  trade: Trade | null;
+  trade: Trade;
   onClose: () => void;
 }
 
 export const AuditPanel = memo(function AuditPanel({ trade, onClose }: Props) {
-  const [history, setHistory] = useState<TradeAudit[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!trade) return;
-    setLoading(true);
-    setError(null);
-    tradesApi.getAudit(trade.id)
-      .then(setHistory)
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [trade]);
+  const { data: history = [], isLoading: loading, error: queryError } = useAuditHistory(trade.id);
+  const error = queryError instanceof Error ? queryError.message : queryError ? String(queryError) : null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
-
-  if (!trade) return null;
 
   return (
     <div

@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { createContext, memo, useContext, useState } from 'react';
 import { Trade, CreateTradeInput, AmendTradeInput, TradeSide } from '../../types/trade';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../Modal/Modal';
@@ -12,30 +12,85 @@ interface Props {
   isAmending: boolean;
 }
 
-const SYMBOLS       = ['AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'GS', 'BABA'];
-const BOOKS         = ['EQUITIES_UK', 'EQUITIES_US', 'TECH_GROWTH', 'EMERGING_MKTS', 'FIXED_INCOME'];
+const SYMBOLS        = ['AAPL', 'MSFT', 'TSLA', 'GOOGL', 'AMZN', 'META', 'NVDA', 'JPM', 'GS', 'BABA'];
+const BOOKS          = ['EQUITIES_UK', 'EQUITIES_US', 'TECH_GROWTH', 'EMERGING_MKTS', 'FIXED_INCOME'];
 const COUNTERPARTIES = ['Goldman Sachs', 'JP Morgan', 'Morgan Stanley', 'Barclays', 'Deutsche Bank', 'UBS', 'Citi'];
 
 type FormErrors = Partial<Record<string, string>>;
 
 function validate(v: Partial<CreateTradeInput>): FormErrors {
   const e: FormErrors = {};
-  if (!v.symbol)             e.symbol       = 'Required';
-  if (!v.quantity || v.quantity <= 0)  e.quantity = 'Must be positive';
-  if (!v.price    || v.price    <= 0)  e.price    = 'Must be positive';
-  if (!v.side)               e.side         = 'Required';
-  if (!v.trader?.trim())     e.trader       = 'Required';
-  if (!v.book)               e.book         = 'Required';
-  if (!v.counterparty)       e.counterparty = 'Required';
+  if (!v.symbol)                      e.symbol       = 'Required';
+  if (!v.quantity || v.quantity <= 0) e.quantity     = 'Must be positive';
+  if (!v.price    || v.price    <= 0) e.price        = 'Must be positive';
+  if (!v.side)                        e.side         = 'Required';
+  if (!v.trader?.trim())              e.trader       = 'Required';
+  if (!v.book)                        e.book         = 'Required';
+  if (!v.counterparty)                e.counterparty = 'Required';
   return e;
 }
 
-export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating, isAmending }: Props) {
-  const isEdit  = !!trade;
-  const isBusy  = isCreating || isAmending;
-  const toast   = useToast();
+// Field compound component — provides id and hasError via context so
+// Field.Input / Field.Select self-wire their id and error class.
+const FieldContext = createContext<{ id: string; hasError: boolean } | null>(null);
 
-  const [values, setValues] = useState<Partial<CreateTradeInput>>({
+function useFieldCtx() {
+  const ctx = useContext(FieldContext);
+  if (!ctx) throw new Error('Field sub-component used outside <Field>');
+  return ctx;
+}
+
+function Field({
+  name, label, required, error, children,
+}: {
+  name: string;
+  label: string;
+  required?: boolean;
+  error?: string | false | undefined;
+  children: React.ReactNode;
+}) {
+  const id = `field-${name}`;
+  return (
+    <FieldContext.Provider value={{ id, hasError: !!error }}>
+      <div className="form-group">
+        <label htmlFor={id} className={`form-label${required ? ' form-label--req' : ''}`}>
+          {label}
+        </label>
+        {children}
+        {error && <p className="form-error" role="alert">{error}</p>}
+      </div>
+    </FieldContext.Provider>
+  );
+}
+
+Field.Input = function FieldInput(props: React.ComponentPropsWithoutRef<'input'>) {
+  const { id, hasError } = useFieldCtx();
+  return (
+    <input
+      id={id}
+      className={`form-control${hasError ? ' form-control--err' : ''}`}
+      {...props}
+    />
+  );
+};
+
+Field.Select = function FieldSelect(props: React.ComponentPropsWithoutRef<'select'>) {
+  const { id, hasError } = useFieldCtx();
+  return (
+    <select
+      id={id}
+      className={`form-control${hasError ? ' form-control--err' : ''}`}
+      {...props}
+    />
+  );
+};
+
+export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, amendTrade, isCreating, isAmending }: Props) {
+  const isEdit = !!trade;
+  const isBusy = isCreating || isAmending;
+  const toast  = useToast();
+
+  const [values,      setValues]      = useState<Partial<CreateTradeInput>>({
     symbol:       trade?.symbol       ?? '',
     quantity:     trade?.quantity,
     price:        trade?.price,
@@ -80,7 +135,6 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
         return;
       }
     }
-
     try {
       setSubmitError(null);
       if (isEdit) {
@@ -121,39 +175,27 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
           <Modal.Body>
             <div className="form-section-label">Instrument</div>
             <div className="form-row">
-              <Field label="Symbol" required error={fieldError('symbol')}>
-                <select
-                  className={`form-control${fieldError('symbol') ? ' form-control--err' : ''}`}
-                  value={values.symbol}
-                  onChange={set('symbol')}
-                  onBlur={blur('symbol')}
-                  autoFocus
-                >
+              <Field name="symbol" label="Symbol" required error={fieldError('symbol')}>
+                <Field.Select value={values.symbol} onChange={set('symbol')} onBlur={blur('symbol')} autoFocus>
                   <option value="">Select symbol…</option>
                   {SYMBOLS.map(s => <option key={s}>{s}</option>)}
-                </select>
+                </Field.Select>
               </Field>
 
-              <Field label="Side" required error={fieldError('side')}>
-                <select
-                  className={`form-control${fieldError('side') ? ' form-control--err' : ''}`}
-                  value={values.side}
-                  onChange={set('side')}
-                  onBlur={blur('side')}
-                >
+              <Field name="side" label="Side" required error={fieldError('side')}>
+                <Field.Select value={values.side} onChange={set('side')} onBlur={blur('side')}>
                   <option value="BUY">BUY</option>
                   <option value="SELL">SELL</option>
-                </select>
+                </Field.Select>
               </Field>
             </div>
 
             <div className="form-row">
-              <Field label="Quantity" required error={fieldError('quantity')}>
-                <input
+              <Field name="quantity" label="Quantity" required error={fieldError('quantity')}>
+                <Field.Input
                   type="number"
                   min={1}
                   step={1}
-                  className={`form-control${fieldError('quantity') ? ' form-control--err' : ''}`}
                   value={values.quantity ?? ''}
                   onChange={set('quantity')}
                   onBlur={blur('quantity')}
@@ -161,12 +203,11 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
                 />
               </Field>
 
-              <Field label="Price (USD)" required error={fieldError('price')}>
-                <input
+              <Field name="price" label="Price (USD)" required error={fieldError('price')}>
+                <Field.Input
                   type="number"
                   min={0.01}
                   step={0.01}
-                  className={`form-control${fieldError('price') ? ' form-control--err' : ''}`}
                   value={values.price ?? ''}
                   onChange={set('price')}
                   onBlur={blur('price')}
@@ -176,9 +217,8 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
             </div>
 
             <div className="form-section-label">Parties</div>
-            <Field label="Trader ID" required error={fieldError('trader')}>
-              <input
-                className={`form-control${fieldError('trader') ? ' form-control--err' : ''}`}
+            <Field name="trader" label="Trader ID" required error={fieldError('trader')}>
+              <Field.Input
                 value={values.trader ?? ''}
                 onChange={set('trader')}
                 onBlur={blur('trader')}
@@ -188,28 +228,18 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
             </Field>
 
             <div className="form-row">
-              <Field label="Book" required error={fieldError('book')}>
-                <select
-                  className={`form-control${fieldError('book') ? ' form-control--err' : ''}`}
-                  value={values.book}
-                  onChange={set('book')}
-                  onBlur={blur('book')}
-                >
+              <Field name="book" label="Book" required error={fieldError('book')}>
+                <Field.Select value={values.book} onChange={set('book')} onBlur={blur('book')}>
                   <option value="">Select book…</option>
                   {BOOKS.map(b => <option key={b}>{b}</option>)}
-                </select>
+                </Field.Select>
               </Field>
 
-              <Field label="Counterparty" required error={fieldError('counterparty')}>
-                <select
-                  className={`form-control${fieldError('counterparty') ? ' form-control--err' : ''}`}
-                  value={values.counterparty}
-                  onChange={set('counterparty')}
-                  onBlur={blur('counterparty')}
-                >
+              <Field name="counterparty" label="Counterparty" required error={fieldError('counterparty')}>
+                <Field.Select value={values.counterparty} onChange={set('counterparty')} onBlur={blur('counterparty')}>
                   <option value="">Select party…</option>
                   {COUNTERPARTIES.map(c => <option key={c}>{c}</option>)}
-                </select>
+                </Field.Select>
               </Field>
             </div>
 
@@ -244,15 +274,3 @@ export const TradeForm = memo(function TradeForm({ trade, onClose, createTrade, 
     </Modal>
   );
 });
-
-function Field({
-  label, required, error, children,
-}: { label: string; required?: boolean; error?: string | false | undefined; children: React.ReactNode }) {
-  return (
-    <div className="form-group">
-      <label className={`form-label${required ? ' form-label--req' : ''}`}>{label}</label>
-      {children}
-      {error && <p className="form-error">{error}</p>}
-    </div>
-  );
-}

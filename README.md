@@ -117,6 +117,94 @@ The pattern is: **TanStack Query for server state → Context for auth → `useS
 
 ---
 
+### Data Layer
+
+The data layer has three tiers: **database → ORM → repository → service**.
+
+**1. Database — SQLite via Prisma**
+
+Two tables:
+
+```
+Trade
+  id             TRD-XXXXXX (server-generated, sequential)
+  symbol         e.g. AAPL
+  quantity       integer, positive
+  price          float, positive
+  side           BUY | SELL
+  trader         e.g. JSMITH
+  book           e.g. EQUITIES_UK
+  counterparty   e.g. Goldman Sachs
+  tradeTimestamp datetime (set by server on create)
+  status         ACTIVE | CANCELLED
+
+TradeAudit
+  id             auto-increment
+  tradeId        FK → Trade.id
+  action         CREATE | AMEND | CANCEL
+  before         JSON snapshot (null on CREATE)
+  after          JSON snapshot
+  changedAt      datetime
+```
+
+`TradeAudit` is **append-only** — no updates, no deletes. Every mutation writes a full `before`/`after` JSON snapshot so the UI can diff exactly which fields changed.
+
+**2. ORM — Prisma**
+
+Prisma sits between the application and SQLite. Two things it provides:
+
+- **Parameterised queries automatically** — no raw SQL, no SQL injection surface
+- **TypeScript types generated from `schema.prisma`** — if the schema changes, TypeScript catches every broken call site at compile time
+
+Migrations live in `backend/prisma/migrations/` as numbered SQL files. `prisma migrate dev` applies them and regenerates the client.
+
+**3. Repository layer**
+
+Each repository has one job: translate between Prisma's raw DB rows and the domain `Trade` / `TradeAudit` types the rest of the app uses.
+
+```
+TradeRepository
+  findAll(page, pageSize)              → PagedTrades
+  findById(id)                         → Trade | null
+  create(input)                        → Trade
+  update(id, data)                     → Trade
+
+AuditRepository
+  append(tradeId, action, before, after) → void
+  findByTradeId(tradeId)               → TradeAudit[]
+```
+
+`toTradeDTO()` inside `TradeRepository` converts a Prisma row to a `Trade` — e.g. `raw.tradeTimestamp.toISOString()` turns a `Date` into the string the frontend expects. Nothing above the repository ever sees a raw Prisma type.
+
+**4. Service layer**
+
+The service layer owns business rules — things the repository doesn't know about.
+
+- `create` — calls `repo.create`, then writes a `CREATE` audit record
+- `amend` — throws `409` if the trade is `CANCELLED`; calls `repo.update`, then writes an `AMEND` audit record
+- `cancel` — throws `409` if already `CANCELLED`; sets `status: CANCELLED`, then writes a `CANCEL` audit record
+
+Only `TradeService` writes audit records. Repositories are dumb — they never call each other. The service orchestrates both.
+
+**End-to-end mutation flow**
+
+```
+Frontend fetch (Authorization: Bearer <token>)
+  → requireAuth middleware verifies JWT
+  → Zod schema validates request body
+  → TradeService.amend(id, data)
+      → TradeRepository.findById        check trade exists
+      → guard: throw 409 if CANCELLED
+      → TradeRepository.update          write to SQLite
+      → AuditRepository.append          write audit row
+  → Broadcaster.broadcast(TRADE_AMENDED) push WS event to all clients
+  → HTTP 200 JSON
+```
+
+The frontend never touches the database directly — it only sees REST responses and WebSocket events. TanStack Query caches these and keeps the UI in sync.
+
+---
+
 ## Screenshots
 
 **Main blotter — 204 trades, live stats, AG Grid pagination and column filters**

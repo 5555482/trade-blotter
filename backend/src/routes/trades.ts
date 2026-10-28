@@ -5,6 +5,12 @@ import { createTradeSchema, amendTradeSchema } from '../validation/trade.schema'
 import { WsEvent } from '../types';
 import { asyncHandler } from '../lib/async-handler';
 
+const TRADE_ID_RE = /^TRD-\d{6}$/;
+
+function validateTradeId(id: string): boolean {
+  return TRADE_ID_RE.test(id);
+}
+
 export function createTradeRouter(service: TradeService, broadcaster: Broadcaster): Router {
   const router = Router();
 
@@ -15,6 +21,7 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
   }));
 
   router.get('/:id', asyncHandler(async (req, res) => {
+    if (!validateTradeId(req.params.id)) { res.status(400).json({ error: 'Invalid trade ID format' }); return; }
     res.json(await service.getById(req.params.id));
   }));
 
@@ -30,6 +37,7 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
   }));
 
   router.patch('/:id', asyncHandler(async (req, res) => {
+    if (!validateTradeId(req.params.id)) { res.status(400).json({ error: 'Invalid trade ID format' }); return; }
     const parsed = amendTradeSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: parsed.error.flatten() });
@@ -41,6 +49,7 @@ export function createTradeRouter(service: TradeService, broadcaster: Broadcaste
   }));
 
   router.post('/:id/cancel', asyncHandler(async (req, res) => {
+    if (!validateTradeId(req.params.id)) { res.status(400).json({ error: 'Invalid trade ID format' }); return; }
     const trade = await service.cancel(req.params.id);
     broadcaster.broadcast({ type: 'TRADE_CANCELLED', payload: trade } satisfies WsEvent);
     res.json(trade);

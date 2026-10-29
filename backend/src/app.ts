@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import { TradeRepository } from './repositories/trade.repo';
@@ -9,11 +10,14 @@ import { AuditService } from './services/audit.service';
 import { Broadcaster } from './websocket/broadcaster';
 import { createTradeRouter } from './routes/trades';
 import { createAuditRouter } from './routes/audit';
+import { createAuthRouter } from './routes/auth';
+import { requireAuth } from './middleware/auth';
 
 export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): express.Application {
   const app = express();
 
-  app.use(cors({ origin: 'http://localhost:5173' }));
+  app.use(helmet());
+  app.use(cors({ origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173' }));
   app.use(express.json());
 
   app.get('/health', (_req, res) => {
@@ -35,12 +39,15 @@ export function createApp(prisma: PrismaClient, broadcaster: Broadcaster): expre
   const auditService = new AuditService(auditRepo);
   const tradeService = new TradeService(tradeRepo, auditService);
 
-  app.use('/api/trades', createTradeRouter(tradeService, broadcaster));
-  app.use('/api/audit', createAuditRouter(auditService));
+  app.use('/api/auth', createAuthRouter());
+  app.use('/api/trades', requireAuth, createTradeRouter(tradeService, broadcaster));
+  app.use('/api/audit', requireAuth, createAuditRouter(auditService));
 
   app.use((err: Error & { statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.statusCode ?? 500;
-    res.status(status).json({ error: err.message });
+    // Only surface the message for intentional HTTP errors; hide internals on unexpected 500s
+    const message = status < 500 ? err.message : 'Internal server error';
+    res.status(status).json({ error: message });
   });
 
   return app;

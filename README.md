@@ -62,6 +62,149 @@ To prevent ID collisions after a process restart, the in-memory counter lazy-ini
 
 ---
 
+### State Management
+
+The app uses four distinct layers — each owns a specific concern.
+
+**1. Server state — TanStack Query (`useTrades`, `useAuditHistory`)**
+
+The heaviest layer. Manages everything that comes from the backend.
+
+```
+TanStack Query cache
+  ├── ['trades']        → paginated trade list
+  └── ['audit', id]     → audit history per trade
+```
+
+TanStack Query handles background refetching (stale after 30 s), loading/error states, and optimistic updates on amend. WebSocket events patch the cache directly via `applyWsEvent` — no extra fetch needed, the grid updates instantly.
+
+**2. Real-time sync — WebSocket (`useWebSocket`)**
+
+Bridges server push to the Query cache. On each `TRADE_CREATED / TRADE_AMENDED / TRADE_CANCELLED` event it calls `queryClient.setQueryData`, updating the grid without a round-trip. On reconnect, `invalidateQueries` triggers a full refetch to catch any missed events.
+
+**3. Auth state — React Context (`AuthContext`)**
+
+Single piece of global UI state: the JWT token.
+
+```
+AuthContext
+  ├── token: string | null   ← null = show LoginPage, string = show app
+  ├── login()                ← calls POST /api/auth/login, stores token
+  └── logout()               ← clears token, returns to LoginPage
+```
+
+Token lives **in memory only** (React `useState` — never `localStorage`). `useEffect` in `App` syncs it into the API module via `setAuthToken()` so every fetch automatically includes `Authorization: Bearer <token>`. Storing the token in memory rather than `localStorage` prevents XSS scripts from reading it.
+
+**4. Local UI state — `useState` in components**
+
+Ephemeral, component-scoped, never shared upward.
+
+| State | Where | What |
+|---|---|---|
+| `formTrade` | `App` | Which trade the TradeForm modal is editing (`null` = closed) |
+| `auditTrade` | `App` | Which trade the AuditPanel is showing |
+| `pendingId` | `useCancelFlow` | ID of trade awaiting cancel confirmation |
+| `values / errors / touched` | `TradeForm` | Form field state |
+| `username / password / error` | `LoginPage` | Login form state |
+
+**Why no Redux / Zustand?**
+
+- Async/server state is handled better by TanStack Query than a manual store
+- The only true global state is the auth token — one `createContext` is sufficient
+- Local UI state (modals, forms) has no reason to be global
+
+The pattern is: **TanStack Query for server state → Context for auth → `useState` for UI**.
+
+---
+
+### Data Layer
+
+The data layer has three tiers: **database → ORM → repository → service**.
+
+**1. Database — SQLite via Prisma**
+
+Two tables:
+
+```
+Trade
+  id             TRD-XXXXXX (server-generated, sequential)
+  symbol         e.g. AAPL
+  quantity       integer, positive
+  price          float, positive
+  side           BUY | SELL
+  trader         e.g. JSMITH
+  book           e.g. EQUITIES_UK
+  counterparty   e.g. Goldman Sachs
+  tradeTimestamp datetime (set by server on create)
+  status         ACTIVE | CANCELLED
+
+TradeAudit
+  id             auto-increment
+  tradeId        FK → Trade.id
+  action         CREATE | AMEND | CANCEL
+  before         JSON snapshot (null on CREATE)
+  after          JSON snapshot
+  changedAt      datetime
+```
+
+`TradeAudit` is **append-only** — no updates, no deletes. Every mutation writes a full `before`/`after` JSON snapshot so the UI can diff exactly which fields changed.
+
+**2. ORM — Prisma**
+
+Prisma sits between the application and SQLite. Two things it provides:
+
+- **Parameterised queries automatically** — no raw SQL, no SQL injection surface
+- **TypeScript types generated from `schema.prisma`** — if the schema changes, TypeScript catches every broken call site at compile time
+
+Migrations live in `backend/prisma/migrations/` as numbered SQL files. `prisma migrate dev` applies them and regenerates the client.
+
+**3. Repository layer**
+
+Each repository has one job: translate between Prisma's raw DB rows and the domain `Trade` / `TradeAudit` types the rest of the app uses.
+
+```
+TradeRepository
+  findAll(page, pageSize)              → PagedTrades
+  findById(id)                         → Trade | null
+  create(input)                        → Trade
+  update(id, data)                     → Trade
+
+AuditRepository
+  append(tradeId, action, before, after) → void
+  findByTradeId(tradeId)               → TradeAudit[]
+```
+
+`toTradeDTO()` inside `TradeRepository` converts a Prisma row to a `Trade` — e.g. `raw.tradeTimestamp.toISOString()` turns a `Date` into the string the frontend expects. Nothing above the repository ever sees a raw Prisma type.
+
+**4. Service layer**
+
+The service layer owns business rules — things the repository doesn't know about.
+
+- `create` — calls `repo.create`, then writes a `CREATE` audit record
+- `amend` — throws `409` if the trade is `CANCELLED`; calls `repo.update`, then writes an `AMEND` audit record
+- `cancel` — throws `409` if already `CANCELLED`; sets `status: CANCELLED`, then writes a `CANCEL` audit record
+
+Only `TradeService` writes audit records. Repositories are dumb — they never call each other. The service orchestrates both.
+
+**End-to-end mutation flow**
+
+```
+Frontend fetch (Authorization: Bearer <token>)
+  → requireAuth middleware verifies JWT
+  → Zod schema validates request body
+  → TradeService.amend(id, data)
+      → TradeRepository.findById        check trade exists
+      → guard: throw 409 if CANCELLED
+      → TradeRepository.update          write to SQLite
+      → AuditRepository.append          write audit row
+  → Broadcaster.broadcast(TRADE_AMENDED) push WS event to all clients
+  → HTTP 200 JSON
+```
+
+The frontend never touches the database directly — it only sees REST responses and WebSocket events. TanStack Query caches these and keeps the UI in sync.
+
+---
+
 ## Screenshots
 
 **Main blotter — 204 trades, live stats, AG Grid pagination and column filters**
@@ -109,7 +252,10 @@ trade-blotter/
 │   │   ├── services/
 │   │   │   ├── trade.service.ts# Business rules; broadcasts WS events
 │   │   │   └── audit.service.ts# Audit history retrieval
+│   │   ├── middleware/
+│   │   │   └── auth.ts         # requireAuth (JWT verify) + signToken
 │   │   ├── routes/
+│   │   │   ├── auth.ts         # POST /api/auth/login
 │   │   │   ├── trades.ts       # GET /api/trades, POST, PATCH /:id, POST /:id/cancel
 │   │   │   └── audit.ts        # GET /api/audit/:tradeId
 │   │   ├── validation/
@@ -127,17 +273,24 @@ trade-blotter/
 │       ├── main.tsx            # ReactDOM.createRoot + ErrorBoundary
 │       ├── App.tsx             # Root: useTrades + useWebSocket + lazy modals
 │       ├── types/trade.ts      # Frontend-side Trade, TradeAudit, WsEvent types
-│       ├── api/trades.ts       # fetch wrappers for all REST endpoints
+│       ├── api/
+│       │   ├── auth.ts         # POST /api/auth/login fetch wrapper
+│       │   └── trades.ts       # fetch wrappers for all trade/audit endpoints (attaches Bearer token)
 │       ├── context/
+│       │   ├── AuthContext.tsx  # Token in memory, login/logout, useAuth hook
 │       │   └── ToastContext.tsx # Toast provider + useToast hook
 │       ├── hooks/
 │       │   ├── useTrades.ts    # TanStack Query: queries + optimistic mutations
+│       │   ├── useAuditHistory.ts # TanStack Query: audit history per trade
+│       │   ├── useCancelFlow.ts   # Container hook: pendingId + confirm/abort callbacks
 │       │   └── useWebSocket.ts # WS connection with exponential reconnect
 │       ├── components/
-│       │   ├── TradeBlotter/   # AG Grid table, toolbar, CSV export, confirm dialog
-│       │   ├── TradeForm/      # Create / amend modal with per-field validation
+│       │   ├── TradeBlotter/   # AG Grid table, toolbar, CSV export
+│       │   ├── TradeForm/      # Create / amend modal — Field compound component (slot pattern)
 │       │   ├── AuditPanel/     # Timeline view of audit history for a trade
-│       │   └── ConfirmDialog/  # Reusable destructive-action confirmation dialog
+│       │   ├── ConfirmDialog/  # Destructive-action confirmation dialog
+│       │   ├── Modal/          # Compound modal (Modal.Header / .Body / .Footer) with focus trap
+│       │   └── LoginPage/      # Username + password login form
 │       └── utils/
 │           └── formatters.ts   # formatPrice, formatNotional, formatLargeNotional, formatDate
 ├── database/                   # SQLite file written here at runtime (Docker volume mount)
@@ -221,13 +374,16 @@ docker-compose up --build
 
 ## API Reference
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/trades` | All trades, newest first |
-| `POST` | `/api/trades` | Create a trade |
-| `PATCH` | `/api/trades/:id` | Amend a trade (partial update — only provided fields are changed) |
-| `POST` | `/api/trades/:id/cancel` | Cancel a trade (terminal; cannot be reversed) |
-| `GET` | `/api/audit/:tradeId` | Audit history for a trade, newest first |
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | No | Returns a JWT (`{ token }`) for valid credentials |
+| `GET` | `/api/trades` | Yes | All trades, newest first |
+| `POST` | `/api/trades` | Yes | Create a trade |
+| `PATCH` | `/api/trades/:id` | Yes | Amend a trade (partial update — only provided fields are changed) |
+| `POST` | `/api/trades/:id/cancel` | Yes | Cancel a trade (terminal; cannot be reversed) |
+| `GET` | `/api/audit/:tradeId` | Yes | Audit history for a trade, newest first |
+
+All protected routes require an `Authorization: Bearer <token>` header. Omitting it returns `401`. Default local credentials: `admin` / `password` (override via `ADMIN_USERNAME` / `ADMIN_PASSWORD` env vars).
 
 ### WebSocket
 
@@ -243,7 +399,7 @@ All connected clients receive the event so every open browser tab stays in sync 
 
 ## Running Tests
 
-### Backend (unit + integration — 17 tests)
+### Backend (unit + integration — 24 tests)
 
 ```bash
 cd backend
@@ -293,7 +449,7 @@ GitHub Actions runs both jobs on every push and pull request to `main`:
 
 7. **WebSocket reconnects are the client's responsibility.** `useWebSocket` implements exponential back-off (1 s → 2 s → 4 s … capped at 30 s). The server does not buffer missed events; on reconnect TanStack Query refetches the full trade list via `invalidateQueries`.
 
-8. **No authentication or authorisation.** The API is completely open. Adding auth would be the immediate next step before any production deployment.
+8. **Single admin account.** Authentication is implemented with a single username/password pair from env vars. A production deployment would use a proper user store with hashed passwords (e.g. bcrypt) and role-based access.
 
 ---
 
@@ -307,6 +463,6 @@ GitHub Actions runs both jobs on every push and pull request to `main`:
 | **Append-only audit without archiving** | Perfect audit integrity; simple query | The `TradeAudit` table grows without bound; pruning/archiving would need a separate migration strategy |
 | **AG Grid Community (not Enterprise)** | Free, no licence required | Server-side row model, advanced clipboard, Excel export, and row grouping are Enterprise-only |
 | **Optimistic create not implemented** | Kept complexity focused on meaningful cases | A create mutation is not optimistic — the server-assigned ID is unknown until the response arrives, so the row appears after the round-trip |
-| **No authentication** | Kept scope focused for the exercise | The API is completely open; not safe to expose publicly without adding an auth layer |
+| **JWT in memory, not localStorage** | Immune to XSS token theft — no script can read in-memory React state | Token lost on page refresh — user must log in again; a refresh-token flow would fix this |
 | **CSS custom properties without a component library** | Full control; no external CSS dependency | More CSS to maintain; accessible components (focus management, ARIA live regions) implemented manually — only ConfirmDialog and modals have keyboard handling |
 | **`React.lazy` for modals only** | Smaller initial bundle; TradeForm and AuditPanel load on demand | Main bundle still includes the blotter and all AG Grid code; route-based splitting would reduce it further |
